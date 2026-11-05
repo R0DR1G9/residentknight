@@ -5,12 +5,59 @@
 
 #define TELA_L 1280
 #define TELA_A 720
+#define TILE 64
+#define COLUNAS 42
+#define LINHAS 34
+#define PES 36
 #define LEON_FRAME_COUNT 8
 #define CENARIO_PATH "assets/cenario.png"
+#define COLISAO_PATH "assets/colisao.txt"
+
+static char mapa[LINHAS][COLUNAS + 1];
+
+static int carregar_colisao(void)
+{
+    FILE *arq = fopen(COLISAO_PATH, "r");
+
+    if (arq == NULL) {
+        return 0;
+    }
+    for (int l = 0; l < LINHAS; l++) {
+        if (fscanf(arq, "%42s", mapa[l]) != 1) {
+            fclose(arq);
+            return 0;
+        }
+    }
+    fclose(arq);
+    return 1;
+}
+
+static int bloqueado(float x, float y)
+{
+    int c = (int)(x / TILE);
+    int l = (int)(y / TILE);
+
+    if (x < 0 || y < 0 || c >= COLUNAS || l >= LINHAS) {
+        return 1;
+    }
+    return mapa[l][c] != '.';
+}
+
+static int caixa_bloqueada(float x, float y)
+{
+    return bloqueado(x - 16, y - 10) || bloqueado(x + 16, y - 10) ||
+           bloqueado(x - 16, y + 2) || bloqueado(x + 16, y + 2);
+}
 
 int main(){
     InitWindow(TELA_L, TELA_A, "Resident Night");
     SetTargetFPS(60);
+
+    if (!carregar_colisao()) {
+        TraceLog(LOG_ERROR, "Colisao nao encontrada: %s", COLISAO_PATH);
+        CloseWindow();
+        return 1;
+    }
 
     Texture2D leonFrames[LEON_FRAME_COUNT] = {0};
 
@@ -38,11 +85,17 @@ int main(){
     camera.offset = (Vector2){TELA_L / 2.0f, TELA_A / 2.0f};
     camera.zoom = 1.0f;
 
-    while(!WindowShouldClose()){
+while(!WindowShouldClose()){
+        Vector2 antes = player;
+
         PlayerUpdate(&player, speed);
 
-        player.x = Clamp(player.x, 48, cenario.width - 48);
-        player.y = Clamp(player.y, 48, cenario.height - 48);
+        if (caixa_bloqueada(player.x, antes.y + PES)) {
+            player.x = antes.x;
+        }
+        if (caixa_bloqueada(player.x, player.y + PES)) {
+            player.y = antes.y;
+        }
 
         bool andando = IsKeyDown(KEY_W) || IsKeyDown(KEY_A) || IsKeyDown(KEY_S) || IsKeyDown(KEY_D);
 
