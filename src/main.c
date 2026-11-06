@@ -1,60 +1,22 @@
 #include "player.h"
+#include "mapa.h"
 #include "raylib.h"
 #include "raymath.h"
 #include <stdio.h>
 
 #define TELA_L 1280
 #define TELA_A 720
-#define TILE 64
-#define COLUNAS 42
-#define LINHAS 34
 #define PES 36
 #define LEON_FRAME_COUNT 8
 #define CENARIO_PATH "assets/cenario.png"
-#define COLISAO_PATH "assets/colisao.txt"
-
-static char mapa[LINHAS][COLUNAS + 1];
-
-static int carregar_colisao(void)
-{
-    FILE *arq = fopen(COLISAO_PATH, "r");
-
-    if (arq == NULL) {
-        return 0;
-    }
-    for (int l = 0; l < LINHAS; l++) {
-        if (fscanf(arq, "%42s", mapa[l]) != 1) {
-            fclose(arq);
-            return 0;
-        }
-    }
-    fclose(arq);
-    return 1;
-}
-
-static int bloqueado(float x, float y)
-{
-    int c = (int)(x / TILE);
-    int l = (int)(y / TILE);
-
-    if (x < 0 || y < 0 || c >= COLUNAS || l >= LINHAS) {
-        return 1;
-    }
-    return mapa[l][c] != '.';
-}
-
-static int caixa_bloqueada(float x, float y)
-{
-    return bloqueado(x - 16, y - 10) || bloqueado(x + 16, y - 10) ||
-           bloqueado(x - 16, y + 2) || bloqueado(x + 16, y + 2);
-}
+#define LUZ_PATH "assets/luz.png"
 
 int main(){
     InitWindow(TELA_L, TELA_A, "Resident Night");
     SetTargetFPS(60);
 
-    if (!carregar_colisao()) {
-        TraceLog(LOG_ERROR, "Colisao nao encontrada: %s", COLISAO_PATH);
+    if (!mapa_carregar()) {
+        TraceLog(LOG_ERROR, "Colisao nao encontrada: %s", MAPA_COLISAO_PATH);
         CloseWindow();
         return 1;
     }
@@ -78,6 +40,19 @@ int main(){
         return 1;
     }
 
+    Texture2D luzFixa = LoadTexture(LUZ_PATH);
+    if (luzFixa.id == 0) {
+        TraceLog(LOG_ERROR, "Luz nao encontrada: %s", LUZ_PATH);
+        CloseWindow();
+        return 1;
+    }
+
+    Image gradiente = GenImageGradientRadial(640, 640, 0.0f, WHITE, BLACK);
+    Texture2D luzLeon = LoadTextureFromImage(gradiente);
+    UnloadImage(gradiente);
+
+    RenderTexture2D luzTela = LoadRenderTexture(TELA_L, TELA_A);
+
     Vector2 player = {416, 532};
     float speed = 200.0f;
 
@@ -85,15 +60,15 @@ int main(){
     camera.offset = (Vector2){TELA_L / 2.0f, TELA_A / 2.0f};
     camera.zoom = 1.0f;
 
-while(!WindowShouldClose()){
+    while(!WindowShouldClose()){
         Vector2 antes = player;
 
         PlayerUpdate(&player, speed);
 
-        if (caixa_bloqueada(player.x, antes.y + PES)) {
+        if (mapa_caixa_bloqueada(player.x, antes.y + PES, 16, 10, 2)) {
             player.x = antes.x;
         }
-        if (caixa_bloqueada(player.x, player.y + PES)) {
+        if (mapa_caixa_bloqueada(player.x, player.y + PES, 16, 10, 2)) {
             player.y = antes.y;
         }
 
@@ -114,6 +89,16 @@ while(!WindowShouldClose()){
         camera.target.x = (int)Clamp(player.x, TELA_L / 2.0f, cenario.width - TELA_L / 2.0f);
         camera.target.y = (int)Clamp(player.y, TELA_A / 2.0f, cenario.height - TELA_A / 2.0f);
 
+        Vector2 leonTela = GetWorldToScreen2D(player, camera);
+
+        BeginTextureMode(luzTela);
+        ClearBackground((Color){52, 58, 74, 255});
+        BeginBlendMode(BLEND_ADDITIVE);
+        DrawTextureRec(luzFixa, (Rectangle){camera.target.x - TELA_L / 2.0f, camera.target.y - TELA_A / 2.0f, TELA_L, TELA_A}, (Vector2){0, 0}, WHITE);
+        DrawTexture(luzLeon, (int)leonTela.x - 320, (int)leonTela.y - 320, (Color){235, 225, 190, 255});
+        EndBlendMode();
+        EndTextureMode();
+
         BeginDrawing();
         ClearBackground(BLACK);
 
@@ -122,10 +107,17 @@ while(!WindowShouldClose()){
         DrawTextureEx(leonFrames[frameAtual], (Vector2){player.x - 48, player.y - 48}, 0, 3, WHITE);
         EndMode2D();
 
+        BeginBlendMode(BLEND_MULTIPLIED);
+        DrawTextureRec(luzTela.texture, (Rectangle){0, 0, TELA_L, -TELA_A}, (Vector2){0, 0}, WHITE);
+        EndBlendMode();
+
         EndDrawing();
     }
 
     UnloadTexture(cenario);
+    UnloadTexture(luzFixa);
+    UnloadTexture(luzLeon);
+    UnloadRenderTexture(luzTela);
     for (int i = 0; i < LEON_FRAME_COUNT; i++) {
         UnloadTexture(leonFrames[i]);
     }
