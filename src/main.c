@@ -22,7 +22,7 @@ int main(){
         CloseWindow();
         return 1;
     }
-    bloqueado_fn = bloqueado;
+    bloqueado_fn = mapa_bloqueado;
 
     Texture2D cenario = LoadTexture(CENARIO_PATH);
     if (cenario.id == 0) {
@@ -62,14 +62,8 @@ int main(){
 
     RenderTexture2D luzTela = LoadRenderTexture(TELA_L, TELA_A);
 
-    Vector2 player = {416, 532};
+    Jogador leon = {{416, 532}, VIDA_MAX, 1, 1, 0.0f, 0.0f, 0.0f};
     float speed = 200.0f;
-    float tempoAnim = 0.0f;
-    float tempoTiro = 0.0f;
-    float invencivel = 0.0f;
-    int arma = 1;
-    int vida = VIDA_MAX;
-    int direita = 1;
 
     Camera2D camera = {0};
     camera.offset = (Vector2){TELA_L / 2.0f, TELA_A / 2.0f};
@@ -82,64 +76,64 @@ int main(){
         bool andando = false;
         bool atirando = false;
 
-        tempoAnim += dt;
-        tempoTiro -= dt;
-        invencivel -= dt;
+        leon.tempoAnim += dt;
+        leon.tempoTiro -= dt;
+        leon.invencivel -= dt;
 
-        if (vida > 0) {
-            Vector2 antes = player;
+        if (leon.vida > 0) {
+            Vector2 antes = leon.pos;
 
             for (int i = 0; i < NUM_ARMAS; i++) {
                 if (IsKeyPressed(KEY_ONE + i)) {
-                    arma = i;
+                    leon.arma = i;
                 }
             }
 
-            PlayerUpdate(&player, speed);
+            PlayerUpdate(&leon.pos, speed);
 
-            if (caixa_bloqueada(player.x, antes.y + PES)) {
-                player.x = antes.x;
+            if (mapa_caixa_bloqueada(leon.pos.x, antes.y + PES, 16, 10, 2)) {
+                leon.pos.x = antes.x;
             }
-            if (caixa_bloqueada(player.x, player.y + PES)) {
-                player.y = antes.y;
-            }
-
-            andando = player.x != antes.x || player.y != antes.y;
-            if (player.x != antes.x) {
-                direita = player.x > antes.x;
+            if (mapa_caixa_bloqueada(leon.pos.x, leon.pos.y + PES, 16, 10, 2)) {
+                leon.pos.y = antes.y;
             }
 
-            camera.target.x = (int)Clamp(player.x, TELA_L / 2.0f, cenario.width - TELA_L / 2.0f);
-            camera.target.y = (int)Clamp(player.y, TELA_A / 2.0f, cenario.height - TELA_A / 2.0f);
+            andando = leon.pos.x != antes.x || leon.pos.y != antes.y;
+            if (leon.pos.x != antes.x) {
+                leon.direita = leon.pos.x > antes.x;
+            }
 
-            atirando = arma > 0 && (IsKeyDown(KEY_SPACE) || IsMouseButtonDown(MOUSE_BUTTON_LEFT));
+            camera.target.x = (int)Clamp(leon.pos.x, TELA_L / 2.0f, cenario.width - TELA_L / 2.0f);
+            camera.target.y = (int)Clamp(leon.pos.y, TELA_A / 2.0f, cenario.height - TELA_A / 2.0f);
+
+            atirando = leon.arma > 0 && (IsKeyDown(KEY_SPACE) || IsMouseButtonDown(MOUSE_BUTTON_LEFT));
             if (atirando) {
                 Vector2 alvo = GetScreenToWorld2D(GetMousePosition(), camera);
 
-                direita = alvo.x >= player.x;
-                if (tempoTiro <= 0) {
-                    atirar(arma, player.x, player.y, alvo.x, alvo.y);
-                    tempoTiro = ARMAS[arma].cadencia;
+                leon.direita = alvo.x >= leon.pos.x;
+                if (leon.tempoTiro <= 0) {
+                    atirar(leon.arma, leon.pos.x, leon.pos.y, alvo.x, alvo.y);
+                    leon.tempoTiro = ARMAS[leon.arma].cadencia;
                 }
             }
 
-            int dano = inimigos_atualizar(player.x, player.y + PES, dt);
-            if (dano > 0 && invencivel <= 0) {
-                vida -= dano;
-                invencivel = 0.6f;
+            int dano = inimigos_atualizar(leon.pos.x, leon.pos.y + PES, dt);
+            if (dano > 0 && leon.invencivel <= 0) {
+                leon.vida -= dano;
+                leon.invencivel = 0.6f;
             }
         } else if (IsKeyPressed(KEY_ENTER)) {
             inimigos_liberar();
             inimigos_criar();
-            player = (Vector2){416, 532};
-            vida = VIDA_MAX;
+            leon.pos = (Vector2){416, 532};
+            leon.vida = VIDA_MAX;
         }
 
-        Texture2D tex = atirando ? texTiro[arma][(int)(tempoAnim * 14) % 6]
-                                 : texCorrer[arma][andando ? (int)(tempoAnim * 10) % 8 : 0];
-        Color cor = (invencivel > 0 && (int)(invencivel * 20) % 2 == 0) ? RED : WHITE;
+        Texture2D tex = atirando ? texTiro[leon.arma][(int)(leon.tempoAnim * 14) % 6]
+                                 : texCorrer[leon.arma][andando ? (int)(leon.tempoAnim * 10) % 8 : 0];
+        Color cor = (leon.invencivel > 0 && (int)(leon.invencivel * 20) % 2 == 0) ? RED : WHITE;
 
-        Vector2 leonTela = GetWorldToScreen2D(player, camera);
+        Vector2 leonTela = GetWorldToScreen2D(leon.pos, camera);
 
         BeginTextureMode(luzTela);
         ClearBackground((Color){52, 58, 74, 255});
@@ -154,9 +148,9 @@ int main(){
 
         BeginMode2D(camera);
         DrawTexture(cenario, 0, 0, WHITE);
-        inimigos_desenhar(-1e9f, player.y + PES);
-        DrawTexturePro(tex, (Rectangle){0, 0, direita ? 32 : -32, 32}, (Rectangle){player.x - 48, player.y - 48, 96, 96}, (Vector2){0, 0}, 0, cor);
-        inimigos_desenhar(player.y + PES, 1e9f);
+        inimigos_desenhar(-1e9f, leon.pos.y + PES);
+        DrawTexturePro(tex, (Rectangle){0, 0, leon.direita ? 32 : -32, 32}, (Rectangle){leon.pos.x - 48, leon.pos.y - 48, 96, 96}, (Vector2){0, 0}, 0, cor);
+        inimigos_desenhar(leon.pos.y + PES, 1e9f);
         tiros_desenhar();
         EndMode2D();
 
@@ -164,13 +158,9 @@ int main(){
         DrawTextureRec(luzTela.texture, (Rectangle){0, 0, TELA_L, -TELA_A}, (Vector2){0, 0}, WHITE);
         EndBlendMode();
 
-        BeginBlendMode(BLEND_MULTIPLIED);
-        DrawTextureRec(luzTela.texture, (Rectangle){0, 0, TELA_L, -TELA_A}, (Vector2){0, 0}, WHITE);
-        EndBlendMode();
-
-        DrawRectangle(TELA_L - 240, 12, 220 * (vida > 0 ? vida : 0) / VIDA_MAX, 18, vida > 30 ? GREEN : RED);
-        DrawText(TextFormat("%s | Zumbis: %d", ARMAS[arma].nome, vivos), TELA_L - 240, 36, 18, RAYWHITE);
-        if (vida <= 0) {
+        DrawRectangle(TELA_L - 240, 12, 220 * (leon.vida > 0 ? leon.vida : 0) / VIDA_MAX, 18, leon.vida > 30 ? GREEN : RED);
+        DrawText(TextFormat("%s | Zumbis: %d", ARMAS[leon.arma].nome, vivos), TELA_L - 240, 36, 18, RAYWHITE);
+        if (leon.vida <= 0) {
             DrawText("VOCE MORREU - ENTER recomeca", 330, 330, 40, RED);
         }
         EndDrawing();
