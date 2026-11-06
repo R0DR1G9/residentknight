@@ -1,6 +1,13 @@
-# Linux/macOS (raylib instalada no sistema)
-all:
-	gcc main.c player.c -o leon_teste -lraylib -lm
+CC = gcc
+SRC = $(wildcard src/*.c)
+CFLAGS ?= $(shell pkg-config --cflags raylib)
+LIBS ?= $(shell pkg-config --libs raylib) -lm
 
-# Windows (MinGW + raylib):
-# gcc main.c player.c -o leon_teste.exe -lraylib -lopengl32 -lgdi32 -lwinmm
+all:
+	$(CC) $(SRC) -o src/jogo $(CFLAGS) $(LIBS)
+
+run: all
+	cd src && ./jogo
+
+clean:
+	rm -f src/jogo
