@@ -167,6 +167,7 @@ int main(){
     }
 
     inimigos_liberar();
+    mapa_liberar();
     UnloadTexture(cenario);
     UnloadTexture(luzFixa);
     UnloadTexture(luzLeon);

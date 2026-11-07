@@ -1,7 +1,8 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "mapa.h"
 
-static char grade[MAPA_LINHAS][MAPA_COLUNAS + 1];
+static char **grade = NULL;
 
 int mapa_carregar(void)
 {
@@ -11,14 +12,35 @@ int mapa_carregar(void)
     if (arq == NULL) {
         return 0;
     }
+    grade = calloc(MAPA_LINHAS, sizeof(char *));
+    if (grade == NULL) {
+        fclose(arq);
+        return 0;
+    }
     for (l = 0; l < MAPA_LINHAS; l++) {
-        if (fscanf(arq, "%42s", grade[l]) != 1) {
+        grade[l] = malloc(MAPA_COLUNAS + 1);
+        if (grade[l] == NULL || fscanf(arq, "%42s", grade[l]) != 1) {
             fclose(arq);
+            mapa_liberar();
             return 0;
         }
     }
     fclose(arq);
     return 1;
+}
+
+void mapa_liberar(void)
+{
+    int l;
+
+    if (grade == NULL) {
+        return;
+    }
+    for (l = 0; l < MAPA_LINHAS; l++) {
+        free(grade[l]);
+    }
+    free(grade);
+    grade = NULL;
 }
 
 int mapa_bloqueado(float x, float y)
