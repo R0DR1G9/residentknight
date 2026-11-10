@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include "inimigo.h"
@@ -6,6 +7,13 @@
 #define DETECCAO 420.0f
 #define VEL_TIRO 950.0f
 #define PEITO 36.0f
+#define VIDA_INIMIGO 60
+#define ZUMBI_FRAMES 8
+#define ZUMBI_L 384.0f
+#define ZUMBI_A 512.0f
+#define ZUMBI_ESCALA 0.27f
+#define ZUMBI_PE 430.0f
+#define ZUMBI_TOPO 85.0f
 
 const Arma ARMAS[NUM_ARMAS] = {
     {"Sem arma", 0, 0, 0.00f, 0.50f},
@@ -18,6 +26,7 @@ static const int NASCER[8][2] = {
     {14, 6}, {27, 6}, {34, 8}, {30, 5}, {30, 22}, {25, 25}, {35, 28}, {30, 29}
 };
 
+static Texture2D texZumbi[ZUMBI_FRAMES];
 static Inimigo *inimigos = NULL;
 static Tiro *tiros = NULL;
 int vivos = 0;
@@ -27,6 +36,29 @@ static int caixa(float x, float y)
 {
     return bloqueado_fn(x - 14, y - 10) || bloqueado_fn(x + 14, y - 10) ||
            bloqueado_fn(x - 14, y + 2) || bloqueado_fn(x + 14, y + 2);
+}
+
+void inimigos_carregar(void)
+{
+    char path[100];
+    int k;
+
+    for (k = 0; k < ZUMBI_FRAMES; k++) {
+        snprintf(path, sizeof(path), "assets/zumbi_frames/zumbi_frame_%02d.png", k + 1);
+        texZumbi[k] = LoadTexture(path);
+        if (texZumbi[k].id == 0) {
+            TraceLog(LOG_ERROR, "Frame do zumbi nao encontrado: %s", path);
+        }
+    }
+}
+
+void inimigos_descarregar(void)
+{
+    int k;
+
+    for (k = 0; k < ZUMBI_FRAMES; k++) {
+        UnloadTexture(texZumbi[k]);
+    }
 }
 
 void inimigos_criar(void)
@@ -43,7 +75,8 @@ void inimigos_criar(void)
         i->y = NASCER[k][1] * 64 + 56;
         i->anim = k;
         i->ataque = 0.5f;
-        i->vida = 60;
+        i->vida = VIDA_INIMIGO;
+        i->vidaMax = VIDA_INIMIGO;
         i->direita = 0;
         i->prox = inimigos;
         inimigos = i;
@@ -178,25 +211,43 @@ int inimigos_atualizar(float px, float py, float dt)
 void inimigos_desenhar(float yMin, float yMax)
 {
     Inimigo *i;
-    float u = 3.1f;
+    float w = ZUMBI_L * ZUMBI_ESCALA;
+    float h = ZUMBI_A * ZUMBI_ESCALA;
 
     for (i = inimigos; i != NULL; i = i->prox) {
         float x = i->x;
         float y = i->y;
-        float d = i->direita ? 1 : -1;
-        float s = sinf(i->anim * 9);
-        float q = fabsf(s) * u;
+        int quadro = ((int)(i->anim * 10) % ZUMBI_FRAMES + ZUMBI_FRAMES) % ZUMBI_FRAMES;
 
         if (y <= yMin || y > yMax) {
             continue;
         }
         DrawEllipse((int)x, (int)y, 19, 6, Fade(BLACK, 0.4f));
-        DrawRectangle(x - 5 * u + s * 2 * u, y - 8 * u, 4 * u, 8 * u, (Color){46, 50, 62, 255});
-        DrawRectangle(x + u - s * 2 * u, y - 8 * u, 4 * u, 8 * u, (Color){46, 50, 62, 255});
-        DrawRectangle(x - 6 * u, y - 18 * u - q, 12 * u, 11 * u, (Color){74, 72, 66, 255});
-        DrawRectangle(d > 0 ? x + 3 * u : x - 14 * u, y - 17 * u - q, 11 * u, 3 * u, (Color){118, 156, 104, 255});
-        DrawRectangle(x - 5 * u, y - 27 * u - q, 10 * u, 9 * u, (Color){118, 156, 104, 255});
-        DrawRectangle(x + d * 3 * u - u, y - 24 * u - q, 2 * u, 2 * u, RED);
+        DrawTexturePro(texZumbi[quadro],
+                       (Rectangle){0, 0, i->direita ? ZUMBI_L : -ZUMBI_L, ZUMBI_A},
+                       (Rectangle){x - w / 2, y - ZUMBI_PE * ZUMBI_ESCALA, w, h},
+                       (Vector2){0, 0}, 0, WHITE);
+    }
+}
+
+void inimigos_desenhar_vidas(Camera2D camera)
+{
+    Inimigo *i;
+    const int larg = 44;
+    const int alt = 6;
+
+    for (i = inimigos; i != NULL; i = i->prox) {
+        Vector2 p = GetWorldToScreen2D((Vector2){i->x, i->y - (ZUMBI_PE - ZUMBI_TOPO) * ZUMBI_ESCALA - 12}, camera);
+        int x = (int)p.x - larg / 2;
+        int y = (int)p.y;
+        float f = i->vida > 0 ? (float)i->vida / i->vidaMax : 0.0f;
+        Color cor = f > 0.5f ? GREEN : (f > 0.25f ? ORANGE : RED);
+        const char *txt = TextFormat("%d", i->vida > 0 ? i->vida : 0);
+
+        DrawRectangle(x - 1, y - 1, larg + 2, alt + 2, BLACK);
+        DrawRectangle(x, y, larg, alt, (Color){60, 20, 20, 255});
+        DrawRectangle(x, y, (int)(larg * f), alt, cor);
+        DrawText(txt, (int)p.x - MeasureText(txt, 10) / 2, y - 12, 10, RAYWHITE);
     }
 }
 

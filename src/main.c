@@ -69,6 +69,7 @@ int main(){
     camera.offset = (Vector2){TELA_L / 2.0f, TELA_A / 2.0f};
     camera.zoom = 1.0f;
 
+    inimigos_carregar();
     inimigos_criar();
 
     while(!WindowShouldClose()){
@@ -158,6 +159,8 @@ int main(){
         DrawTextureRec(luzTela.texture, (Rectangle){0, 0, TELA_L, -TELA_A}, (Vector2){0, 0}, WHITE);
         EndBlendMode();
 
+        inimigos_desenhar_vidas(camera);
+
         DrawRectangle(TELA_L - 240, 12, 220 * (leon.vida > 0 ? leon.vida : 0) / VIDA_MAX, 18, leon.vida > 30 ? GREEN : RED);
         DrawText(TextFormat("%s | Zumbis: %d", ARMAS[leon.arma].nome, vivos), TELA_L - 240, 36, 18, RAYWHITE);
         if (leon.vida <= 0) {
@@ -167,6 +170,7 @@ int main(){
     }
 
     inimigos_liberar();
+    inimigos_descarregar();
     mapa_liberar();
     UnloadTexture(cenario);
     UnloadTexture(luzFixa);

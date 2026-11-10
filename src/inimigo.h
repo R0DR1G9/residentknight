@@ -13,7 +13,7 @@ typedef struct Arma {
 
 typedef struct Inimigo {
     float x, y, anim, ataque;
-    int vida, direita;
+    int vida, vidaMax, direita;
     struct Inimigo *prox;
 } Inimigo;
 
@@ -27,11 +27,14 @@ extern const Arma ARMAS[NUM_ARMAS];
 extern int vivos;
 extern int (*bloqueado_fn)(float x, float y);
 
+void inimigos_carregar(void);
+void inimigos_descarregar(void);
 void inimigos_criar(void);
 void inimigos_liberar(void);
 void atirar(int arma, float x, float y, float alvoX, float alvoY);
 int inimigos_atualizar(float px, float py, float dt);
 void inimigos_desenhar(float yMin, float yMax);
+void inimigos_desenhar_vidas(Camera2D camera);
 void tiros_desenhar(void);
 
 #endif
