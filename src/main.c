@@ -12,6 +12,9 @@
 #define CENARIO_PATH "assets/cenario.png"
 #define LUZ_PATH "assets/luz.png"
 
+#define IDLE_FRAME_COUNT 8
+#define IDLE_FRAME_SPEED 0.15f   // tempo de cada frame parado (sem arma)
+
 int main(){
     InitWindow(TELA_L, TELA_A, "Resident Night");
     SetTargetFPS(60);
@@ -33,6 +36,7 @@ int main(){
 
     Texture2D texCorrer[NUM_ARMAS][8] = {0};
     Texture2D texTiro[NUM_ARMAS][6] = {0};
+    Texture2D texParado[IDLE_FRAME_COUNT] = {0};
     const char *pasta[NUM_ARMAS] = {"leon_run_frames", "leon_pistol_frames", "leon_mp5_frames", "leon_shotgun_frames"};
     const char *pastaTiro[NUM_ARMAS] = {"", "pistola", "mp5", "shotgun"};
 
@@ -42,11 +46,25 @@ int main(){
         for (int i = 0; i < 8; i++) {
             snprintf(path, sizeof(path), a ? "assets/%s/frame_%d.png" : "assets/%s/frame_%02d.png", pasta[a], i + 1);
             texCorrer[a][i] = LoadTexture(path);
+            SetTextureFilter(texCorrer[a][i], TEXTURE_FILTER_POINT);
         }
         for (int i = 0; a && i < 6; i++) {
             snprintf(path, sizeof(path), "assets/leon_firing_frames/%s/frame_%d.png", pastaTiro[a], i + 1);
             texTiro[a][i] = LoadTexture(path);
+            SetTextureFilter(texTiro[a][i], TEXTURE_FILTER_POINT);
         }
+    }
+
+    // Animação do Leon parado, sem arma (assets/leon_idle_frames)
+    for (int i = 0; i < IDLE_FRAME_COUNT; i++) {
+        char path[100];
+
+        snprintf(path, sizeof(path), "assets/leon_idle_frames/frame_%02d.png", i + 1);
+        texParado[i] = LoadTexture(path);
+        if (texParado[i].id == 0) {
+            TraceLog(LOG_ERROR, "Frame idle nao encontrado: %s", path);
+        }
+        SetTextureFilter(texParado[i], TEXTURE_FILTER_POINT);
     }
 
     Texture2D luzFixa = LoadTexture(LUZ_PATH);
@@ -100,6 +118,9 @@ int main(){
             }
 
             andando = leon.pos.x != antes.x || leon.pos.y != antes.y;
+
+            // Lado para onde o Leon está virado: só muda ao andar na horizontal
+            // (andando só para cima/baixo mantém o último lado)
             if (leon.pos.x != antes.x) {
                 leon.direita = leon.pos.x > antes.x;
             }
@@ -130,8 +151,21 @@ int main(){
             leon.vida = VIDA_MAX;
         }
 
-        Texture2D tex = atirando ? texTiro[leon.arma][(int)(leon.tempoAnim * 14) % 6]
-                                 : texCorrer[leon.arma][andando ? (int)(leon.tempoAnim * 10) % 8 : 0];
+        // Escolha do frame:
+        //  - atirando: animação de tiro da arma
+        //  - andando: ciclo de corrida da arma
+        //  - parado sem arma: animação idle (8 frames)
+        //  - parado com arma: primeiro frame da corrida da arma
+        Texture2D tex;
+        if (atirando) {
+            tex = texTiro[leon.arma][(int)(leon.tempoAnim * 14) % 6];
+        } else if (andando) {
+            tex = texCorrer[leon.arma][(int)(leon.tempoAnim * 10) % 8];
+        } else if (leon.arma == 0) {
+            tex = texParado[(int)(leon.tempoAnim / IDLE_FRAME_SPEED) % IDLE_FRAME_COUNT];
+        } else {
+            tex = texCorrer[leon.arma][0];
+        }
         Color cor = (leon.invencivel > 0 && (int)(leon.invencivel * 20) % 2 == 0) ? RED : WHITE;
 
         Vector2 leonTela = GetWorldToScreen2D(leon.pos, camera);
@@ -150,6 +184,7 @@ int main(){
         BeginMode2D(camera);
         DrawTexture(cenario, 0, 0, WHITE);
         inimigos_desenhar(-1e9f, leon.pos.y + PES);
+        // Largura negativa no source espelha o sprite (direita = original, esquerda = espelhado)
         DrawTexturePro(tex, (Rectangle){0, 0, leon.direita ? 32 : -32, 32}, (Rectangle){leon.pos.x - 48, leon.pos.y - 48, 96, 96}, (Vector2){0, 0}, 0, cor);
         inimigos_desenhar(leon.pos.y + PES, 1e9f);
         tiros_desenhar();
@@ -183,6 +218,9 @@ int main(){
         for (int i = 0; i < 6; i++) {
             UnloadTexture(texTiro[a][i]);
         }
+    }
+    for (int i = 0; i < IDLE_FRAME_COUNT; i++) {
+        UnloadTexture(texParado[i]);
     }
     CloseWindow();
 
