@@ -9,11 +9,13 @@
 #define PEITO 36.0f
 #define VIDA_INIMIGO 60
 #define ZUMBI_FRAMES 8
-#define ZUMBI_L 384.0f
-#define ZUMBI_A 512.0f
 #define ZUMBI_ESCALA 0.27f
 #define ZUMBI_PE 430.0f
 #define ZUMBI_TOPO 85.0f
+#define ZUMBI_PE_ATAQUE 412.0f
+#define GOLPE_TEMPO 0.8f
+#define GOLPE_ACERTO 0.4f
+#define ALCANCE_GOLPE 45
 
 const Arma ARMAS[NUM_ARMAS] = {
     {"Sem arma", 0, 0, 0.00f, 0.50f},
@@ -27,6 +29,7 @@ static const int NASCER[8][2] = {
 };
 
 static Texture2D texZumbi[ZUMBI_FRAMES];
+static Texture2D texAtaque[ZUMBI_FRAMES];
 static Inimigo *inimigos = NULL;
 static Tiro *tiros = NULL;
 int vivos = 0;
@@ -49,6 +52,11 @@ void inimigos_carregar(void)
         if (texZumbi[k].id == 0) {
             TraceLog(LOG_ERROR, "Frame do zumbi nao encontrado: %s", path);
         }
+        snprintf(path, sizeof(path), "assets/zumbi_ataque_frames/ataque_zumbi_frame_%02d.png", k + 1);
+        texAtaque[k] = LoadTexture(path);
+        if (texAtaque[k].id == 0) {
+            TraceLog(LOG_ERROR, "Frame de ataque do zumbi nao encontrado: %s", path);
+        }
     }
 }
 
@@ -58,6 +66,7 @@ void inimigos_descarregar(void)
 
     for (k = 0; k < ZUMBI_FRAMES; k++) {
         UnloadTexture(texZumbi[k]);
+        UnloadTexture(texAtaque[k]);
     }
 }
 
@@ -75,6 +84,8 @@ void inimigos_criar(void)
         i->y = NASCER[k][1] * 64 + 56;
         i->anim = k;
         i->ataque = 0.5f;
+        i->golpe = 0;
+        i->acertou = 0;
         i->vida = VIDA_INIMIGO;
         i->vidaMax = VIDA_INIMIGO;
         i->direita = 0;
@@ -171,6 +182,16 @@ int inimigos_atualizar(float px, float py, float dt)
         float d = sqrtf(dx * dx + dy * dy);
 
         i->ataque -= dt;
+        if (i->golpe > 0) {
+            i->golpe -= dt;
+            if (!i->acertou && i->golpe <= GOLPE_ACERTO) {
+                i->acertou = 1;
+                if (d < ALCANCE_GOLPE + 15) {
+                    dano += 10;
+                }
+            }
+            continue;
+        }
         if (d < DETECCAO) {
             i->direita = dx >= 0;
         }
@@ -186,9 +207,10 @@ int inimigos_atualizar(float px, float py, float dt)
             }
             i->anim += dt;
         }
-        if (d < 40 && i->ataque <= 0) {
-            dano += 10;
-            i->ataque = 1;
+        if (d < ALCANCE_GOLPE && i->ataque <= 0) {
+            i->golpe = GOLPE_TEMPO;
+            i->acertou = 0;
+            i->ataque = 1.1f;
         }
     }
 
@@ -211,8 +233,6 @@ int inimigos_atualizar(float px, float py, float dt)
 void inimigos_desenhar(float yMin, float yMax)
 {
     Inimigo *i;
-    float w = ZUMBI_L * ZUMBI_ESCALA;
-    float h = ZUMBI_A * ZUMBI_ESCALA;
 
     for (i = inimigos; i != NULL; i = i->prox) {
         float x = i->x;
@@ -222,10 +242,17 @@ void inimigos_desenhar(float yMin, float yMax)
         if (y <= yMin || y > yMax) {
             continue;
         }
+        Texture2D tex = texZumbi[quadro];
+        float pe = ZUMBI_PE;
+
+        if (i->golpe > 0) {
+            tex = texAtaque[(int)((GOLPE_TEMPO - i->golpe) / GOLPE_TEMPO * ZUMBI_FRAMES) % ZUMBI_FRAMES];
+            pe = ZUMBI_PE_ATAQUE;
+        }
         DrawEllipse((int)x, (int)y, 19, 6, Fade(BLACK, 0.4f));
-        DrawTexturePro(texZumbi[quadro],
-                       (Rectangle){0, 0, i->direita ? ZUMBI_L : -ZUMBI_L, ZUMBI_A},
-                       (Rectangle){x - w / 2, y - ZUMBI_PE * ZUMBI_ESCALA, w, h},
+        DrawTexturePro(tex,
+                       (Rectangle){0, 0, i->direita ? (float)tex.width : -(float)tex.width, (float)tex.height},
+                       (Rectangle){x - tex.width * ZUMBI_ESCALA / 2, y - pe * ZUMBI_ESCALA, tex.width * ZUMBI_ESCALA, tex.height * ZUMBI_ESCALA},
                        (Vector2){0, 0}, 0, WHITE);
     }
 }
