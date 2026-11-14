@@ -13,7 +13,8 @@ typedef struct Arma {
 
 typedef struct Inimigo {
     float x, y, anim, ataque, golpe;
-    int vida, vidaMax, direita, acertou;
+    float morte;
+    int vida, vidaMax, direita, acertou, boss;
     struct Inimigo *prox;
 } Inimigo;
 

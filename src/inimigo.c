@@ -16,6 +16,16 @@
 #define GOLPE_TEMPO 0.8f
 #define GOLPE_ACERTO 0.4f
 #define ALCANCE_GOLPE 45
+#define BOSS_VIDA 600
+#define BOSS_VEL 85.0f
+#define BOSS_DANO 25
+#define BOSS_ALCANCE 85
+#define BOSS_ESCALA 0.25f
+#define BOSS_PE 672.0f
+#define BOSS_TOPO 24.0f
+#define BOSS_GOLPE_TEMPO 0.9f
+#define BOSS_GOLPE_ACERTO 0.5f
+#define BOSS_MORTE_TEMPO 0.22f
 
 const Arma ARMAS[NUM_ARMAS] = {
     {"Sem arma", 0, 0, 0.00f, 0.50f},
@@ -25,11 +35,14 @@ const Arma ARMAS[NUM_ARMAS] = {
 };
 
 static const int NASCER[8][2] = {
-    {14, 6}, {27, 6}, {34, 8}, {30, 5}, {30, 22}, {25, 25}, {35, 28}, {30, 29}
+    {14, 6}, {27, 6}, {34, 8}, {30, 5}, {30, 22}, {25, 25}, {35, 28}, {26, 29}
 };
 
 static Texture2D texZumbi[ZUMBI_FRAMES];
 static Texture2D texAtaque[ZUMBI_FRAMES];
+static Texture2D texBossAndar[ZUMBI_FRAMES];
+static Texture2D texBossAtaque[ZUMBI_FRAMES];
+static Texture2D texBossMorte[ZUMBI_FRAMES];
 static Inimigo *inimigos = NULL;
 static Tiro *tiros = NULL;
 int vivos = 0;
@@ -41,22 +54,29 @@ static int caixa(float x, float y)
            bloqueado_fn(x - 14, y + 2) || bloqueado_fn(x + 14, y + 2);
 }
 
+static Texture2D frame(const char *pasta, const char *nome, int k)
+{
+    char path[120];
+    Texture2D t;
+
+    snprintf(path, sizeof(path), "assets/%s/%s_%02d.png", pasta, nome, k + 1);
+    t = LoadTexture(path);
+    if (t.id == 0) {
+        TraceLog(LOG_ERROR, "Frame nao encontrado: %s", path);
+    }
+    return t;
+}
+
 void inimigos_carregar(void)
 {
-    char path[100];
     int k;
 
     for (k = 0; k < ZUMBI_FRAMES; k++) {
-        snprintf(path, sizeof(path), "assets/zumbi_frames/zumbi_frame_%02d.png", k + 1);
-        texZumbi[k] = LoadTexture(path);
-        if (texZumbi[k].id == 0) {
-            TraceLog(LOG_ERROR, "Frame do zumbi nao encontrado: %s", path);
-        }
-        snprintf(path, sizeof(path), "assets/zumbi_ataque_frames/ataque_zumbi_frame_%02d.png", k + 1);
-        texAtaque[k] = LoadTexture(path);
-        if (texAtaque[k].id == 0) {
-            TraceLog(LOG_ERROR, "Frame de ataque do zumbi nao encontrado: %s", path);
-        }
+        texZumbi[k] = frame("zumbi_frames", "zumbi_frame", k);
+        texAtaque[k] = frame("zumbi_ataque_frames", "ataque_zumbi_frame", k);
+        texBossAndar[k] = frame("boss_frames", "boss_frame", k);
+        texBossAtaque[k] = frame("boss_ataque_frames", "boss_ataque_frame", k);
+        texBossMorte[k] = frame("boss_morte_frames", "boss_morte_frame", k);
     }
 }
 
@@ -67,7 +87,33 @@ void inimigos_descarregar(void)
     for (k = 0; k < ZUMBI_FRAMES; k++) {
         UnloadTexture(texZumbi[k]);
         UnloadTexture(texAtaque[k]);
+        UnloadTexture(texBossAndar[k]);
+        UnloadTexture(texBossAtaque[k]);
+        UnloadTexture(texBossMorte[k]);
     }
+}
+
+static void novo(float x, float y, int vida, int boss)
+{
+    Inimigo *i = malloc(sizeof(Inimigo));
+
+    if (i == NULL) {
+        return;
+    }
+    i->x = x;
+    i->y = y;
+    i->anim = vivos;
+    i->ataque = 0.5f;
+    i->golpe = 0;
+    i->morte = -1;
+    i->acertou = 0;
+    i->vida = vida;
+    i->vidaMax = vida;
+    i->direita = 0;
+    i->boss = boss;
+    i->prox = inimigos;
+    inimigos = i;
+    vivos++;
 }
 
 void inimigos_criar(void)
@@ -75,24 +121,9 @@ void inimigos_criar(void)
     int k;
 
     for (k = 0; k < 8; k++) {
-        Inimigo *i = malloc(sizeof(Inimigo));
-
-        if (i == NULL) {
-            return;
-        }
-        i->x = NASCER[k][0] * 64 + 32;
-        i->y = NASCER[k][1] * 64 + 56;
-        i->anim = k;
-        i->ataque = 0.5f;
-        i->golpe = 0;
-        i->acertou = 0;
-        i->vida = VIDA_INIMIGO;
-        i->vidaMax = VIDA_INIMIGO;
-        i->direita = 0;
-        i->prox = inimigos;
-        inimigos = i;
-        vivos++;
+        novo(NASCER[k][0] * 64 + 32, NASCER[k][1] * 64 + 56, VIDA_INIMIGO, 0);
     }
+    novo(31 * 64 + 32, 29 * 64 + 56, BOSS_VIDA, 1);
 }
 
 void inimigos_liberar(void)
@@ -152,10 +183,11 @@ static void mover_tiros(float dt)
             t->y += t->vy * dt / passos;
             fim = bloqueado_fn(t->x, t->y + PEITO);
             for (i = inimigos; i != NULL && !fim; i = i->prox) {
+                float raio = i->boss ? 42 : 26;
                 float dx = t->x - i->x;
-                float dy = t->y - (i->y - PEITO);
+                float dy = t->y - (i->y - (i->boss ? 70 : PEITO));
 
-                if (i->vida > 0 && dx * dx + dy * dy < 26 * 26) {
+                if (i->vida > 0 && dx * dx + dy * dy < raio * raio) {
                     i->vida -= t->dano;
                     fim = 1;
                 }
@@ -181,23 +213,39 @@ int inimigos_atualizar(float px, float py, float dt)
         float dy = py - i->y;
         float d = sqrtf(dx * dx + dy * dy);
 
+        float alcance = i->boss ? BOSS_ALCANCE : ALCANCE_GOLPE;
+        float tempo = i->boss ? BOSS_GOLPE_TEMPO : GOLPE_TEMPO;
+        float acerto = i->boss ? BOSS_GOLPE_ACERTO : GOLPE_ACERTO;
+        float vel = i->boss ? BOSS_VEL : VEL_INIMIGO;
+        float visao = i->boss ? 560 : DETECCAO;
+
+        if (i->vida <= 0) {
+            if (i->boss && i->morte < 0) {
+                i->morte = 0;
+                vivos--;
+            }
+            if (i->boss) {
+                i->morte += dt;
+            }
+            continue;
+        }
         i->ataque -= dt;
         if (i->golpe > 0) {
             i->golpe -= dt;
-            if (!i->acertou && i->golpe <= GOLPE_ACERTO) {
+            if (!i->acertou && i->golpe <= acerto) {
                 i->acertou = 1;
-                if (d < ALCANCE_GOLPE + 15) {
-                    dano += 10;
+                if (d < alcance + 15) {
+                    dano += i->boss ? BOSS_DANO : 10;
                 }
             }
             continue;
         }
-        if (d < DETECCAO) {
+        if (d < visao) {
             i->direita = dx >= 0;
         }
-        if (d < DETECCAO && d > 30) {
-            float vx = dx / d * VEL_INIMIGO * dt;
-            float vy = dy / d * VEL_INIMIGO * dt;
+        if (d < visao && d > (i->boss ? 50 : 30)) {
+            float vx = dx / d * vel * dt;
+            float vy = dy / d * vel * dt;
 
             if (!caixa(i->x + vx, i->y)) {
                 i->x += vx;
@@ -207,10 +255,10 @@ int inimigos_atualizar(float px, float py, float dt)
             }
             i->anim += dt;
         }
-        if (d < ALCANCE_GOLPE && i->ataque <= 0) {
-            i->golpe = GOLPE_TEMPO;
+        if (d < alcance && i->ataque <= 0) {
+            i->golpe = tempo;
             i->acertou = 0;
-            i->ataque = 1.1f;
+            i->ataque = i->boss ? 1.8f : 1.1f;
         }
     }
 
@@ -218,7 +266,7 @@ int inimigos_atualizar(float px, float py, float dt)
 
     p = &inimigos;
     while (*p != NULL) {
-        if ((*p)->vida <= 0) {
+        if ((*p)->vida <= 0 && !(*p)->boss) {
             Inimigo *morto = *p;
             *p = morto->prox;
             free(morto);
@@ -244,15 +292,26 @@ void inimigos_desenhar(float yMin, float yMax)
         }
         Texture2D tex = texZumbi[quadro];
         float pe = ZUMBI_PE;
+        float esc = ZUMBI_ESCALA;
 
-        if (i->golpe > 0) {
+        if (i->boss) {
+            pe = BOSS_PE;
+            esc = BOSS_ESCALA;
+            if (i->morte >= 0) {
+                tex = texBossMorte[(int)fminf(ZUMBI_FRAMES - 1, i->morte / BOSS_MORTE_TEMPO)];
+            } else if (i->golpe > 0) {
+                tex = texBossAtaque[(int)((BOSS_GOLPE_TEMPO - i->golpe) / BOSS_GOLPE_TEMPO * ZUMBI_FRAMES) % ZUMBI_FRAMES];
+            } else {
+                tex = texBossAndar[quadro];
+            }
+        } else if (i->golpe > 0) {
             tex = texAtaque[(int)((GOLPE_TEMPO - i->golpe) / GOLPE_TEMPO * ZUMBI_FRAMES) % ZUMBI_FRAMES];
             pe = ZUMBI_PE_ATAQUE;
         }
-        DrawEllipse((int)x, (int)y, 19, 6, Fade(BLACK, 0.4f));
+        DrawEllipse((int)x, (int)y, i->boss ? 44 : 19, i->boss ? 13 : 6, Fade(BLACK, 0.4f));
         DrawTexturePro(tex,
                        (Rectangle){0, 0, i->direita ? (float)tex.width : -(float)tex.width, (float)tex.height},
-                       (Rectangle){x - tex.width * ZUMBI_ESCALA / 2, y - pe * ZUMBI_ESCALA, tex.width * ZUMBI_ESCALA, tex.height * ZUMBI_ESCALA},
+                       (Rectangle){x - tex.width * esc / 2, y - pe * esc, tex.width * esc, tex.height * esc},
                        (Vector2){0, 0}, 0, WHITE);
     }
 }
@@ -260,16 +319,21 @@ void inimigos_desenhar(float yMin, float yMax)
 void inimigos_desenhar_vidas(Camera2D camera)
 {
     Inimigo *i;
-    const int larg = 44;
     const int alt = 6;
 
     for (i = inimigos; i != NULL; i = i->prox) {
-        Vector2 p = GetWorldToScreen2D((Vector2){i->x, i->y - (ZUMBI_PE - ZUMBI_TOPO) * ZUMBI_ESCALA - 12}, camera);
+        float topo = i->boss ? (BOSS_PE - BOSS_TOPO) * BOSS_ESCALA : (ZUMBI_PE - ZUMBI_TOPO) * ZUMBI_ESCALA;
+        Vector2 p = GetWorldToScreen2D((Vector2){i->x, i->y - topo - 12}, camera);
+        int larg = i->boss ? 120 : 44;
         int x = (int)p.x - larg / 2;
         int y = (int)p.y;
         float f = i->vida > 0 ? (float)i->vida / i->vidaMax : 0.0f;
         Color cor = f > 0.5f ? GREEN : (f > 0.25f ? ORANGE : RED);
         const char *txt = TextFormat("%d", i->vida > 0 ? i->vida : 0);
+
+        if (i->vida <= 0 && i->boss) {
+            continue;
+        }
 
         DrawRectangle(x - 1, y - 1, larg + 2, alt + 2, BLACK);
         DrawRectangle(x, y, larg, alt, (Color){60, 20, 20, 255});
