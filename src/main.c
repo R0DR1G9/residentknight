@@ -9,8 +9,10 @@
 #define TELA_A 720
 #define PES 36
 #define VIDA_MAX 100
-#define CENARIO_PATH "assets/cenario.png"
-#define LUZ_PATH "assets/luz.png"
+#define INICIO_X 312.0f   // tile (6, 9) da sala superior esquerda
+#define INICIO_Y 420.0f   // (pos.y + PES cai no meio do tile 9)
+#define CENARIO_PATH "assets/mapa.png"
+#define LUZ_PATH "assets/iluminacao.png"
 
 #define IDLE_FRAME_COUNT 8
 #define IDLE_FRAME_SPEED 0.15f   // tempo de cada frame parado (sem arma)
@@ -80,7 +82,7 @@ int main(){
 
     RenderTexture2D luzTela = LoadRenderTexture(TELA_L, TELA_A);
 
-    Jogador leon = {{416, 532}, VIDA_MAX, 1, 1, 0.0f, 0.0f, 0.0f};
+    Jogador leon = {{INICIO_X, INICIO_Y}, VIDA_MAX, 1, 1, 0.0f, 0.0f, 0.0f};
     float speed = 200.0f;
 
     Camera2D camera = {0};
@@ -147,7 +149,7 @@ int main(){
         } else if (IsKeyPressed(KEY_ENTER)) {
             inimigos_liberar();
             inimigos_criar();
-            leon.pos = (Vector2){416, 532};
+            leon.pos = (Vector2){INICIO_X, INICIO_Y};
             leon.vida = VIDA_MAX;
         }
 
