@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "inimigo.h"
+#include "mapa.h"
 
 #define VEL_INIMIGO 110.0f
 #define DETECCAO 420.0f
@@ -34,9 +35,33 @@ const Arma ARMAS[NUM_ARMAS] = {
     {"Shotgun", 14, 6, 0.28f, 0.90f}
 };
 
-static const int NASCER[8][2] = {
-    {14, 6}, {27, 6}, {34, 8}, {30, 5}, {30, 22}, {25, 25}, {35, 28}, {26, 29}
+/* Pontos de nascimento dos zumbis: {coluna, linha} em tiles do mapa (colisao.txt), agrupados por sala.
+   Para ter mais (ou menos) inimigos basta adicionar/remover linhas aqui. Todos estao em chao livre. */
+static const int NASCER[][2] = {
+    /* sala superior esquerda */
+    {15, 5}, {16, 11},
+    /* sala superior central */
+    {35, 4}, {28, 5}, {27, 10}, {34, 12},
+    /* sala superior direita */
+    {59, 5}, {48, 6}, {54, 7}, {43, 9}, {60, 10}, {50, 12},
+    /* sala do meio esquerda */
+    {7, 18}, {13, 22}, {3, 23}, {8, 26},
+    /* sala central (reator) */
+    {35, 22}, {30, 24}, {25, 26}, {36, 29}, {31, 30},
+    /* sala direita (enfermaria) */
+    {52, 21}, {60, 22}, {45, 26}, {60, 27}, {51, 28},
+    /* sala inferior esquerda */
+    {6, 35}, {13, 39}, {6, 40},
+    /* sala inferior central (servidores) */
+    {31, 37}, {24, 39}, {38, 39}
 };
+#define NUM_NASCER ((int)(sizeof(NASCER) / sizeof(NASCER[0])))
+#define BOSS_COL 32
+#define BOSS_LIN 38
+
+/* centro do tile em x; y fica perto da base do tile (os pes do inimigo) */
+#define TILE_X(c) ((c) * MAPA_TILE + MAPA_TILE / 2)
+#define TILE_Y(l) ((l) * MAPA_TILE + MAPA_TILE - 8)
 
 static Texture2D texZumbi[ZUMBI_FRAMES];
 static Texture2D texAtaque[ZUMBI_FRAMES];
@@ -120,10 +145,10 @@ void inimigos_criar(void)
 {
     int k;
 
-    for (k = 0; k < 8; k++) {
-        novo(NASCER[k][0] * 64 + 32, NASCER[k][1] * 64 + 56, VIDA_INIMIGO, 0);
+    for (k = 0; k < NUM_NASCER; k++) {
+        novo(TILE_X(NASCER[k][0]), TILE_Y(NASCER[k][1]), VIDA_INIMIGO, 0);
     }
-    novo(31 * 64 + 32, 29 * 64 + 56, BOSS_VIDA, 1);
+    novo(TILE_X(BOSS_COL), TILE_Y(BOSS_LIN), BOSS_VIDA, 1);
 }
 
 void inimigos_liberar(void)
