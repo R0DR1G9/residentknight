@@ -9,14 +9,8 @@
 #define TELA_A 720
 #define PES 36
 #define VIDA_MAX 100
-<<<<<<< HEAD
-#define VEL_JOGADOR 200.0f
-#define INICIO_X 312.0f
-#define INICIO_Y 420.0f
-=======
 #define INICIO_X 312.0f   // tile (6, 9) da sala superior esquerda
 #define INICIO_Y 420.0f   // (pos.y + PES cai no meio do tile 9)
->>>>>>> f1c1fc7668397b901117770d75846915401169fa
 #define CENARIO_PATH "assets/mapa.png"
 #define LUZ_PATH "assets/iluminacao.png"
 
@@ -515,8 +509,6 @@ int main(void)
         CloseWindow();
         return 1;
     }
-<<<<<<< HEAD
-=======
 
     Texture2D texCorrer[NUM_ARMAS][8] = {0};
     Texture2D texTiro[NUM_ARMAS][6] = {0};
@@ -571,7 +563,6 @@ int main(void)
     camera.offset = (Vector2){TELA_L / 2.0f, TELA_A / 2.0f};
     camera.zoom = 1.0f;
 
->>>>>>> f1c1fc7668397b901117770d75846915401169fa
     inimigos_carregar();
 
     while (!jogo.sair && !WindowShouldClose()) {
@@ -587,8 +578,6 @@ int main(void)
             if (jogo.estado == CREDITOS) {
                 creditos_desenhar(&jogo);
             }
-<<<<<<< HEAD
-=======
             if (mapa_caixa_bloqueada(leon.pos.x, leon.pos.y + PES, 16, 10, 2)) {
                 leon.pos.y = antes.y;
             }
@@ -639,7 +628,6 @@ int main(void)
             tex = texCorrer[leon.arma][(int)(leon.tempoAnim * 10) % 8];
         } else if (leon.arma == 0) {
             tex = texParado[(int)(leon.tempoAnim / IDLE_FRAME_SPEED) % IDLE_FRAME_COUNT];
->>>>>>> f1c1fc7668397b901117770d75846915401169fa
         } else {
             jogo_atualizar(&jogo, &leon, &cam, &rec, dt);
             jogo_desenhar(&jogo, &leon, &cam, &rec);
