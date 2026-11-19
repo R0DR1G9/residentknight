@@ -1,31 +1,39 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include "inimigo.h"
+#include "mapa.h"
 
-#define VEL_INIMIGO 110.0f
-#define DETECCAO 420.0f
 #define VEL_TIRO 950.0f
 #define PEITO 36.0f
-#define VIDA_INIMIGO 60
-#define ZUMBI_FRAMES 8
-#define ZUMBI_ESCALA 0.27f
-#define ZUMBI_PE 430.0f
-#define ZUMBI_TOPO 85.0f
-#define ZUMBI_PE_ATAQUE 412.0f
-#define GOLPE_TEMPO 0.8f
-#define GOLPE_ACERTO 0.4f
-#define ALCANCE_GOLPE 45
-#define BOSS_VIDA 600
-#define BOSS_VEL 85.0f
-#define BOSS_DANO 25
-#define BOSS_ALCANCE 85
-#define BOSS_ESCALA 0.25f
-#define BOSS_PE 672.0f
-#define BOSS_TOPO 24.0f
-#define BOSS_GOLPE_TEMPO 0.9f
-#define BOSS_GOLPE_ACERTO 0.5f
-#define BOSS_MORTE_TEMPO 0.22f
+#define FRAMES 8
+#define MORTE_TEMPO 0.22f
+#define SPRITE_MORTE 4
+#define BOSS_COL 32
+#define BOSS_LIN 38
+#define TILE_X(c) ((c) * MAPA_TILE + MAPA_TILE / 2)
+#define TILE_Y(l) ((l) * MAPA_TILE + MAPA_TILE - 8)
+#define NUM_NASCER ((int)(sizeof(NASCER) / sizeof(NASCER[0])))
+
+typedef struct {
+    float vel, visao, alcance, parar;
+    float golpeTempo, golpeAcerto, recarga;
+    float raioTiro, alturaPeito;
+    float escala, pe, peAtaque, topo;
+    int dano, vida, sombraX, sombraY, barra;
+} Tipo;
+
+static const Tipo TIPOS[2] = {
+    {.vel = 110, .visao = 420, .alcance = 45, .parar = 30,
+     .golpeTempo = 0.8f, .golpeAcerto = 0.4f, .recarga = 1.1f,
+     .raioTiro = 26, .alturaPeito = 36,
+     .escala = 0.27f, .pe = 430, .peAtaque = 412, .topo = 85,
+     .dano = 10, .vida = 60, .sombraX = 19, .sombraY = 6, .barra = 44},
+    {.vel = 85, .visao = 560, .alcance = 85, .parar = 50,
+     .golpeTempo = 0.9f, .golpeAcerto = 0.5f, .recarga = 1.8f,
+     .raioTiro = 42, .alturaPeito = 70,
+     .escala = 0.25f, .pe = 672, .peAtaque = 672, .topo = 24,
+     .dano = 25, .vida = 600, .sombraX = 44, .sombraY = 13, .barra = 120}
+};
 
 const Arma ARMAS[NUM_ARMAS] = {
     {"Sem arma", 0, 0, 0.00f, 0.50f},
@@ -34,18 +42,31 @@ const Arma ARMAS[NUM_ARMAS] = {
     {"Shotgun", 14, 6, 0.28f, 0.90f}
 };
 
-static const int NASCER[8][2] = {
-    {14, 6}, {27, 6}, {34, 8}, {30, 5}, {30, 22}, {25, 25}, {35, 28}, {26, 29}
+static const int NASCER[][2] = {
+    {15, 5}, {16, 11},
+    {35, 4}, {28, 5}, {27, 10}, {34, 12},
+    {59, 5}, {48, 6}, {54, 7}, {43, 9}, {60, 10}, {50, 12},
+    {7, 18}, {13, 22}, {3, 23}, {8, 26},
+    {35, 22}, {30, 24}, {25, 26}, {36, 29}, {31, 30},
+    {52, 21}, {60, 22}, {45, 26}, {60, 27}, {51, 28},
+    {6, 35}, {13, 39}, {6, 40},
+    {31, 37}, {24, 39}, {38, 39}
 };
 
-static Texture2D texZumbi[ZUMBI_FRAMES];
-static Texture2D texAtaque[ZUMBI_FRAMES];
-static Texture2D texBossAndar[ZUMBI_FRAMES];
-static Texture2D texBossAtaque[ZUMBI_FRAMES];
-static Texture2D texBossMorte[ZUMBI_FRAMES];
+static const char *PASTAS[5][2] = {
+    {"zumbi_frames", "zumbi_frame"},
+    {"zumbi_ataque_frames", "ataque_zumbi_frame"},
+    {"boss_frames", "boss_frame"},
+    {"boss_ataque_frames", "boss_ataque_frame"},
+    {"boss_morte_frames", "boss_morte_frame"}
+};
+
+static Texture2D sprites[5][FRAMES];
 static Inimigo *inimigos = NULL;
 static Tiro *tiros = NULL;
 int vivos = 0;
+float inimigo_mult_vel = 1.0f;
+float inimigo_mult_dano = 1.0f;
 int (*bloqueado_fn)(float x, float y) = NULL;
 
 static int caixa(float x, float y)
@@ -54,114 +75,118 @@ static int caixa(float x, float y)
            bloqueado_fn(x - 14, y + 2) || bloqueado_fn(x + 14, y + 2);
 }
 
-static Texture2D frame(const char *pasta, const char *nome, int k)
-{
-    char path[120];
-    Texture2D t;
-
-    snprintf(path, sizeof(path), "assets/%s/%s_%02d.png", pasta, nome, k + 1);
-    t = LoadTexture(path);
-    if (t.id == 0) {
-        TraceLog(LOG_ERROR, "Frame nao encontrado: %s", path);
-    }
-    return t;
-}
-
 void inimigos_carregar(void)
 {
-    int k;
+    for (int s = 0; s < 5; s++) {
+        for (int k = 0; k < FRAMES; k++) {
+            const char *path = TextFormat("assets/%s/%s_%02d.png", PASTAS[s][0], PASTAS[s][1], k + 1);
 
-    for (k = 0; k < ZUMBI_FRAMES; k++) {
-        texZumbi[k] = frame("zumbi_frames", "zumbi_frame", k);
-        texAtaque[k] = frame("zumbi_ataque_frames", "ataque_zumbi_frame", k);
-        texBossAndar[k] = frame("boss_frames", "boss_frame", k);
-        texBossAtaque[k] = frame("boss_ataque_frames", "boss_ataque_frame", k);
-        texBossMorte[k] = frame("boss_morte_frames", "boss_morte_frame", k);
+            sprites[s][k] = LoadTexture(path);
+            if (sprites[s][k].id == 0) {
+                TraceLog(LOG_ERROR, "Frame nao encontrado: %s", path);
+            }
+        }
     }
 }
 
 void inimigos_descarregar(void)
 {
-    int k;
-
-    for (k = 0; k < ZUMBI_FRAMES; k++) {
-        UnloadTexture(texZumbi[k]);
-        UnloadTexture(texAtaque[k]);
-        UnloadTexture(texBossAndar[k]);
-        UnloadTexture(texBossAtaque[k]);
-        UnloadTexture(texBossMorte[k]);
+    for (int s = 0; s < 5; s++) {
+        for (int k = 0; k < FRAMES; k++) {
+            UnloadTexture(sprites[s][k]);
+        }
     }
 }
 
-static void novo(float x, float y, int vida, int boss)
+static void novo(int col, int lin, int boss)
 {
     Inimigo *i = malloc(sizeof(Inimigo));
 
     if (i == NULL) {
         return;
     }
-    i->x = x;
-    i->y = y;
-    i->anim = vivos;
-    i->ataque = 0.5f;
-    i->golpe = 0;
-    i->morte = -1;
-    i->acertou = 0;
-    i->vida = vida;
-    i->vidaMax = vida;
-    i->direita = 0;
-    i->boss = boss;
-    i->prox = inimigos;
+    *i = (Inimigo){
+        .x = TILE_X(col), .y = TILE_Y(lin), .anim = vivos, .ataque = 0.5f, .morte = -1,
+        .vida = TIPOS[boss].vida, .vidaMax = TIPOS[boss].vida, .boss = boss, .prox = inimigos
+    };
     inimigos = i;
     vivos++;
 }
 
 void inimigos_criar(void)
 {
-    int k;
-
-    for (k = 0; k < 8; k++) {
-        novo(NASCER[k][0] * 64 + 32, NASCER[k][1] * 64 + 56, VIDA_INIMIGO, 0);
+    for (int k = 0; k < NUM_NASCER; k++) {
+        novo(NASCER[k][0], NASCER[k][1], 0);
     }
-    novo(31 * 64 + 32, 29 * 64 + 56, BOSS_VIDA, 1);
+    novo(BOSS_COL, BOSS_LIN, 1);
 }
 
 void inimigos_liberar(void)
 {
     while (inimigos != NULL) {
-        Inimigo *p = inimigos->prox;
+        Inimigo *proximo = inimigos->prox;
+
         free(inimigos);
-        inimigos = p;
+        inimigos = proximo;
     }
     while (tiros != NULL) {
-        Tiro *p = tiros->prox;
+        Tiro *proximo = tiros->prox;
+
         free(tiros);
-        tiros = p;
+        tiros = proximo;
     }
     vivos = 0;
 }
 
 void atirar(int arma, float x, float y, float alvoX, float alvoY)
 {
+    const Arma *a = &ARMAS[arma];
     float ang = atan2f(alvoY - y, alvoX - x);
-    int k;
 
-    for (k = 0; k < ARMAS[arma].balas; k++) {
-        float a = ang + GetRandomValue(-100, 100) / 100.0f * ARMAS[arma].espalhar;
+    for (int k = 0; k < a->balas; k++) {
+        float desvio = ang + GetRandomValue(-100, 100) / 100.0f * a->espalhar;
         Tiro *t = malloc(sizeof(Tiro));
 
         if (t == NULL) {
             return;
         }
-        t->x = x + cosf(ang) * 18;
-        t->y = y + sinf(ang) * 18;
-        t->vx = cosf(a) * VEL_TIRO;
-        t->vy = sinf(a) * VEL_TIRO;
-        t->tempo = 0.8f;
-        t->dano = ARMAS[arma].dano;
-        t->prox = tiros;
+        *t = (Tiro){
+            .x = x + cosf(ang) * 18, .y = y + sinf(ang) * 18,
+            .vx = cosf(desvio) * VEL_TIRO, .vy = sinf(desvio) * VEL_TIRO,
+            .tempo = 0.8f, .dano = a->dano, .prox = tiros
+        };
         tiros = t;
     }
+}
+
+static int acertou_inimigo(const Tiro *t)
+{
+    for (Inimigo *i = inimigos; i != NULL; i = i->prox) {
+        const Tipo *tipo = &TIPOS[i->boss];
+        float dx = t->x - i->x;
+        float dy = t->y - (i->y - tipo->alturaPeito);
+
+        if (i->vida > 0 && dx * dx + dy * dy < tipo->raioTiro * tipo->raioTiro) {
+            i->vida -= t->dano;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int tiro_andar(Tiro *t, float dt)
+{
+    int passos = (int)(VEL_TIRO * dt / 10) + 1;
+
+    t->tempo -= dt;
+    for (int s = 0; s < passos && t->tempo > 0; s++) {
+        t->x += t->vx * dt / passos;
+        t->y += t->vy * dt / passos;
+        if (bloqueado_fn(t->x, t->y + PEITO) || acertou_inimigo(t)) {
+            return 0;
+        }
+    }
+    return t->tempo > 0;
 }
 
 static void mover_tiros(float dt)
@@ -170,183 +195,157 @@ static void mover_tiros(float dt)
 
     while (*p != NULL) {
         Tiro *t = *p;
-        int passos = (int)(VEL_TIRO * dt / 10) + 1;
-        int fim = 0;
-        int s;
 
-        t->tempo -= dt;
-        fim = t->tempo <= 0;
-        for (s = 0; s < passos && !fim; s++) {
-            Inimigo *i;
-
-            t->x += t->vx * dt / passos;
-            t->y += t->vy * dt / passos;
-            fim = bloqueado_fn(t->x, t->y + PEITO);
-            for (i = inimigos; i != NULL && !fim; i = i->prox) {
-                float raio = i->boss ? 42 : 26;
-                float dx = t->x - i->x;
-                float dy = t->y - (i->y - (i->boss ? 70 : PEITO));
-
-                if (i->vida > 0 && dx * dx + dy * dy < raio * raio) {
-                    i->vida -= t->dano;
-                    fim = 1;
-                }
-            }
-        }
-        if (fim) {
+        if (tiro_andar(t, dt)) {
+            p = &t->prox;
+        } else {
             *p = t->prox;
             free(t);
-        } else {
-            p = &t->prox;
         }
     }
+}
+
+static void remover_mortos(void)
+{
+    Inimigo **p = &inimigos;
+
+    while (*p != NULL) {
+        Inimigo *i = *p;
+
+        if (i->vida <= 0 && !i->boss) {
+            *p = i->prox;
+            free(i);
+            vivos--;
+        } else {
+            p = &i->prox;
+        }
+    }
+}
+
+static void andar(Inimigo *i, float vx, float vy)
+{
+    if (!caixa(i->x + vx, i->y)) {
+        i->x += vx;
+    }
+    if (!caixa(i->x, i->y + vy)) {
+        i->y += vy;
+    }
+}
+
+static int atualizar_um(Inimigo *i, float px, float py, float dt)
+{
+    const Tipo *t = &TIPOS[i->boss];
+    float dx = px - i->x;
+    float dy = py - i->y;
+    float d = sqrtf(dx * dx + dy * dy);
+
+    if (i->vida <= 0) {
+        if (i->boss) {
+            if (i->morte < 0) {
+                i->morte = 0;
+                vivos--;
+            }
+            i->morte += dt;
+        }
+        return 0;
+    }
+    i->ataque -= dt;
+    if (i->golpe > 0) {
+        i->golpe -= dt;
+        if (!i->acertou && i->golpe <= t->golpeAcerto) {
+            i->acertou = 1;
+            return d < t->alcance + 15 ? (int)(t->dano * inimigo_mult_dano + 0.5f) : 0;
+        }
+        return 0;
+    }
+    if (d < t->visao) {
+        i->direita = dx >= 0;
+        if (d > t->parar) {
+            float passo = t->vel * inimigo_mult_vel * dt / d;
+
+            andar(i, dx * passo, dy * passo);
+            i->anim += dt;
+        }
+    }
+    if (d < t->alcance && i->ataque <= 0) {
+        i->golpe = t->golpeTempo;
+        i->acertou = 0;
+        i->ataque = t->recarga;
+    }
+    return 0;
 }
 
 int inimigos_atualizar(float px, float py, float dt)
 {
-    Inimigo *i;
-    Inimigo **p;
     int dano = 0;
 
-    for (i = inimigos; i != NULL; i = i->prox) {
-        float dx = px - i->x;
-        float dy = py - i->y;
-        float d = sqrtf(dx * dx + dy * dy);
-
-        float alcance = i->boss ? BOSS_ALCANCE : ALCANCE_GOLPE;
-        float tempo = i->boss ? BOSS_GOLPE_TEMPO : GOLPE_TEMPO;
-        float acerto = i->boss ? BOSS_GOLPE_ACERTO : GOLPE_ACERTO;
-        float vel = i->boss ? BOSS_VEL : VEL_INIMIGO;
-        float visao = i->boss ? 560 : DETECCAO;
-
-        if (i->vida <= 0) {
-            if (i->boss && i->morte < 0) {
-                i->morte = 0;
-                vivos--;
-            }
-            if (i->boss) {
-                i->morte += dt;
-            }
-            continue;
-        }
-        i->ataque -= dt;
-        if (i->golpe > 0) {
-            i->golpe -= dt;
-            if (!i->acertou && i->golpe <= acerto) {
-                i->acertou = 1;
-                if (d < alcance + 15) {
-                    dano += i->boss ? BOSS_DANO : 10;
-                }
-            }
-            continue;
-        }
-        if (d < visao) {
-            i->direita = dx >= 0;
-        }
-        if (d < visao && d > (i->boss ? 50 : 30)) {
-            float vx = dx / d * vel * dt;
-            float vy = dy / d * vel * dt;
-
-            if (!caixa(i->x + vx, i->y)) {
-                i->x += vx;
-            }
-            if (!caixa(i->x, i->y + vy)) {
-                i->y += vy;
-            }
-            i->anim += dt;
-        }
-        if (d < alcance && i->ataque <= 0) {
-            i->golpe = tempo;
-            i->acertou = 0;
-            i->ataque = i->boss ? 1.8f : 1.1f;
-        }
+    for (Inimigo *i = inimigos; i != NULL; i = i->prox) {
+        dano += atualizar_um(i, px, py, dt);
     }
-
     mover_tiros(dt);
-
-    p = &inimigos;
-    while (*p != NULL) {
-        if ((*p)->vida <= 0 && !(*p)->boss) {
-            Inimigo *morto = *p;
-            *p = morto->prox;
-            free(morto);
-            vivos--;
-        } else {
-            p = &(*p)->prox;
-        }
-    }
+    remover_mortos();
     return dano;
+}
+
+static Texture2D sprite_atual(const Inimigo *i)
+{
+    const Tipo *t = &TIPOS[i->boss];
+    int quadro = ((int)(i->anim * 10) % FRAMES + FRAMES) % FRAMES;
+    int ataque = (int)((t->golpeTempo - i->golpe) / t->golpeTempo * FRAMES) % FRAMES;
+
+    if (i->morte >= 0) {
+        return sprites[SPRITE_MORTE][(int)fminf(FRAMES - 1, i->morte / MORTE_TEMPO)];
+    }
+    if (i->golpe > 0) {
+        return sprites[i->boss * 2 + 1][ataque];
+    }
+    return sprites[i->boss * 2][quadro];
 }
 
 void inimigos_desenhar(float yMin, float yMax)
 {
-    Inimigo *i;
+    for (Inimigo *i = inimigos; i != NULL; i = i->prox) {
+        const Tipo *t = &TIPOS[i->boss];
+        Texture2D tex = sprite_atual(i);
+        float pe = i->golpe > 0 ? t->peAtaque : t->pe;
+        float larg = tex.width * t->escala;
+        float alt = tex.height * t->escala;
 
-    for (i = inimigos; i != NULL; i = i->prox) {
-        float x = i->x;
-        float y = i->y;
-        int quadro = ((int)(i->anim * 10) % ZUMBI_FRAMES + ZUMBI_FRAMES) % ZUMBI_FRAMES;
-
-        if (y <= yMin || y > yMax) {
+        if (i->y <= yMin || i->y > yMax) {
             continue;
         }
-        Texture2D tex = texZumbi[quadro];
-        float pe = ZUMBI_PE;
-        float esc = ZUMBI_ESCALA;
-
-        if (i->boss) {
-            pe = BOSS_PE;
-            esc = BOSS_ESCALA;
-            if (i->morte >= 0) {
-                tex = texBossMorte[(int)fminf(ZUMBI_FRAMES - 1, i->morte / BOSS_MORTE_TEMPO)];
-            } else if (i->golpe > 0) {
-                tex = texBossAtaque[(int)((BOSS_GOLPE_TEMPO - i->golpe) / BOSS_GOLPE_TEMPO * ZUMBI_FRAMES) % ZUMBI_FRAMES];
-            } else {
-                tex = texBossAndar[quadro];
-            }
-        } else if (i->golpe > 0) {
-            tex = texAtaque[(int)((GOLPE_TEMPO - i->golpe) / GOLPE_TEMPO * ZUMBI_FRAMES) % ZUMBI_FRAMES];
-            pe = ZUMBI_PE_ATAQUE;
-        }
-        DrawEllipse((int)x, (int)y, i->boss ? 44 : 19, i->boss ? 13 : 6, Fade(BLACK, 0.4f));
+        DrawEllipse((int)i->x, (int)i->y, t->sombraX, t->sombraY, Fade(BLACK, 0.4f));
         DrawTexturePro(tex,
                        (Rectangle){0, 0, i->direita ? (float)tex.width : -(float)tex.width, (float)tex.height},
-                       (Rectangle){x - tex.width * esc / 2, y - pe * esc, tex.width * esc, tex.height * esc},
+                       (Rectangle){i->x - larg / 2, i->y - pe * t->escala, larg, alt},
                        (Vector2){0, 0}, 0, WHITE);
     }
 }
 
 void inimigos_desenhar_vidas(Camera2D camera)
 {
-    Inimigo *i;
-    const int alt = 6;
-
-    for (i = inimigos; i != NULL; i = i->prox) {
-        float topo = i->boss ? (BOSS_PE - BOSS_TOPO) * BOSS_ESCALA : (ZUMBI_PE - ZUMBI_TOPO) * ZUMBI_ESCALA;
-        Vector2 p = GetWorldToScreen2D((Vector2){i->x, i->y - topo - 12}, camera);
-        int larg = i->boss ? 120 : 44;
-        int x = (int)p.x - larg / 2;
+    for (Inimigo *i = inimigos; i != NULL; i = i->prox) {
+        const Tipo *t = &TIPOS[i->boss];
+        Vector2 p = GetWorldToScreen2D((Vector2){i->x, i->y - (t->pe - t->topo) * t->escala - 12}, camera);
+        int x = (int)p.x - t->barra / 2;
         int y = (int)p.y;
-        float f = i->vida > 0 ? (float)i->vida / i->vidaMax : 0.0f;
+        float f = (float)i->vida / i->vidaMax;
         Color cor = f > 0.5f ? GREEN : (f > 0.25f ? ORANGE : RED);
-        const char *txt = TextFormat("%d", i->vida > 0 ? i->vida : 0);
+        const char *txt = TextFormat("%d", i->vida);
 
-        if (i->vida <= 0 && i->boss) {
+        if (i->vida <= 0) {
             continue;
         }
-
-        DrawRectangle(x - 1, y - 1, larg + 2, alt + 2, BLACK);
-        DrawRectangle(x, y, larg, alt, (Color){60, 20, 20, 255});
-        DrawRectangle(x, y, (int)(larg * f), alt, cor);
+        DrawRectangle(x - 1, y - 1, t->barra + 2, 8, BLACK);
+        DrawRectangle(x, y, t->barra, 6, (Color){60, 20, 20, 255});
+        DrawRectangle(x, y, (int)(t->barra * f), 6, cor);
         DrawText(txt, (int)p.x - MeasureText(txt, 10) / 2, y - 12, 10, RAYWHITE);
     }
 }
 
 void tiros_desenhar(void)
 {
-    Tiro *t;
-
-    for (t = tiros; t != NULL; t = t->prox) {
+    for (Tiro *t = tiros; t != NULL; t = t->prox) {
         DrawLineEx((Vector2){t->x - t->vx * 0.02f, t->y - t->vy * 0.02f}, (Vector2){t->x, t->y}, 4, YELLOW);
     }
 }

@@ -1,46 +1,60 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include "raylib.h"
 #include "mapa.h"
 
 static char **grade = NULL;
 
+void mapa_liberar(void)
+{
+    if (grade == NULL) {
+        return;
+    }
+    for (int l = 0; l < MAPA_LINHAS; l++) {
+        free(grade[l]);
+    }
+    free(grade);
+    grade = NULL;
+}
+
+static int falhar(FILE *arq)
+{
+    fclose(arq);
+    mapa_liberar();
+    return 0;
+}
+
 int mapa_carregar(void)
 {
     FILE *arq = fopen(MAPA_COLISAO_PATH, "r");
-    int l;
+    char linha[256];
 
     if (arq == NULL) {
         return 0;
     }
     grade = calloc(MAPA_LINHAS, sizeof(char *));
     if (grade == NULL) {
-        fclose(arq);
-        return 0;
+        return falhar(arq);
     }
-    for (l = 0; l < MAPA_LINHAS; l++) {
-        grade[l] = malloc(MAPA_COLUNAS + 1);
-        if (grade[l] == NULL || fscanf(arq, "%42s", grade[l]) != 1) {
-            fclose(arq);
-            mapa_liberar();
-            return 0;
+    for (int l = 0; l < MAPA_LINHAS; l++) {
+        if (fgets(linha, sizeof(linha), arq) == NULL) {
+            return falhar(arq);
         }
+        linha[strcspn(linha, "\r\n")] = '\0';
+        if ((int)strlen(linha) < MAPA_COLUNAS) {
+            TraceLog(LOG_ERROR, "colisao.txt: linha %d tem menos de %d colunas", l + 1, MAPA_COLUNAS);
+            return falhar(arq);
+        }
+        grade[l] = malloc(MAPA_COLUNAS + 1);
+        if (grade[l] == NULL) {
+            return falhar(arq);
+        }
+        memcpy(grade[l], linha, MAPA_COLUNAS);
+        grade[l][MAPA_COLUNAS] = '\0';
     }
     fclose(arq);
     return 1;
-}
-
-void mapa_liberar(void)
-{
-    int l;
-
-    if (grade == NULL) {
-        return;
-    }
-    for (l = 0; l < MAPA_LINHAS; l++) {
-        free(grade[l]);
-    }
-    free(grade);
-    grade = NULL;
 }
 
 int mapa_bloqueado(float x, float y)

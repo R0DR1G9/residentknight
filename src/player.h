@@ -5,7 +5,7 @@
 
 typedef struct {
     Vector2 pos;
-    int vida, arma, direita;
+    int vida, arma, direita, andando, atirando;
     float tempoAnim, tempoTiro, invencivel;
 } Jogador;
 
