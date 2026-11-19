@@ -15,6 +15,8 @@
 #define INICIO_Y 420.0f
 #define CENARIO_PATH "assets/mapa.png"
 #define LUZ_PATH "assets/iluminacao.png"
+#define MUSICA_PATH "assets/audio/ambiente.ogg"
+#define MUSICA_VOLUME 0.5f
 
 #define IDLE_FRAMES 8
 #define IDLE_VEL 0.15f
@@ -56,6 +58,8 @@ typedef struct {
 typedef struct {
     Texture2D cenario, luzFixa, luzLeon;
     RenderTexture2D luzTela;
+    Music musica;
+    bool temMusica;
     Texture2D correr[NUM_ARMAS][8], tiro[NUM_ARMAS][6], parado[IDLE_FRAMES];
 } Recursos;
 
@@ -118,6 +122,17 @@ static int recursos_carregar(Recursos *r)
     r->luzLeon = LoadTextureFromImage(gradiente);
     UnloadImage(gradiente);
     r->luzTela = LoadRenderTexture(TELA_L, TELA_A);
+    if (IsAudioDeviceReady()) {
+        r->musica = LoadMusicStream(MUSICA_PATH);
+        r->temMusica = IsMusicValid(r->musica);
+    }
+    if (r->temMusica) {
+        r->musica.looping = true;
+        SetMusicVolume(r->musica, MUSICA_VOLUME);
+        PlayMusicStream(r->musica);
+    } else {
+        TraceLog(LOG_WARNING, "Musica indisponivel: %s", MUSICA_PATH);
+    }
     return 1;
 }
 
@@ -127,6 +142,10 @@ static void recursos_descarregar(Recursos *r)
     UnloadTexture(r->luzFixa);
     UnloadTexture(r->luzLeon);
     UnloadRenderTexture(r->luzTela);
+    if (r->temMusica) {
+        StopMusicStream(r->musica);
+        UnloadMusicStream(r->musica);
+    }
     for (int a = 0; a < NUM_ARMAS; a++) {
         descarregar_serie(r->correr[a], 8);
         descarregar_serie(r->tiro[a], 6);
@@ -534,16 +553,19 @@ int main(void)
     Camera2D cam = {.offset = {TELA_L / 2.0f, TELA_A / 2.0f}, .zoom = ZOOM_CAMERA};
 
     InitWindow(TELA_L, TELA_A, "Resident Night");
+    InitAudioDevice();
     SetTargetFPS(60);
     ChangeDirectory(GetApplicationDirectory());
 
     if (!mapa_carregar()) {
         TraceLog(LOG_ERROR, "Colisao nao encontrada: %s", MAPA_COLISAO_PATH);
+        CloseAudioDevice();
         CloseWindow();
         return 1;
     }
     bloqueado_fn = mapa_bloqueado;
     if (!recursos_carregar(&rec)) {
+        CloseAudioDevice();
         CloseWindow();
         return 1;
     }
@@ -553,6 +575,9 @@ int main(void)
     while (!jogo.sair && !WindowShouldClose()) {
         float dt = GetFrameTime();
 
+        if (rec.temMusica) {
+            UpdateMusicStream(rec.musica);
+        }
         if (jogo.estado == MENU) {
             menu_atualizar(&jogo, &leon);
             if (jogo.estado == MENU) {
@@ -574,6 +599,7 @@ int main(void)
     placar_liberar();
     mapa_liberar();
     recursos_descarregar(&rec);
+    CloseAudioDevice();
     CloseWindow();
     return 0;
 }
