@@ -9,8 +9,9 @@
 #define TELA_A 720
 #define PES 36
 #define VIDA_MAX 100
-#define INICIO_X 312.0f   // tile (6, 9) da sala superior esquerda
-#define INICIO_Y 420.0f   // (pos.y + PES cai no meio do tile 9)
+#define VEL_JOGADOR 200.0f
+#define INICIO_X 312.0f
+#define INICIO_Y 420.0f
 #define CENARIO_PATH "assets/mapa.png"
 #define LUZ_PATH "assets/iluminacao.png"
 
@@ -509,60 +510,6 @@ int main(void)
         CloseWindow();
         return 1;
     }
-
-    Texture2D texCorrer[NUM_ARMAS][8] = {0};
-    Texture2D texTiro[NUM_ARMAS][6] = {0};
-    Texture2D texParado[IDLE_FRAME_COUNT] = {0};
-    const char *pasta[NUM_ARMAS] = {"leon_run_frames", "leon_pistol_frames", "leon_mp5_frames", "leon_shotgun_frames"};
-    const char *pastaTiro[NUM_ARMAS] = {"", "pistola", "mp5", "shotgun"};
-
-    for (int a = 0; a < NUM_ARMAS; a++) {
-        char path[100];
-
-        for (int i = 0; i < 8; i++) {
-            snprintf(path, sizeof(path), a ? "assets/%s/frame_%d.png" : "assets/%s/frame_%02d.png", pasta[a], i + 1);
-            texCorrer[a][i] = LoadTexture(path);
-            SetTextureFilter(texCorrer[a][i], TEXTURE_FILTER_POINT);
-        }
-        for (int i = 0; a && i < 6; i++) {
-            snprintf(path, sizeof(path), "assets/leon_firing_frames/%s/frame_%d.png", pastaTiro[a], i + 1);
-            texTiro[a][i] = LoadTexture(path);
-            SetTextureFilter(texTiro[a][i], TEXTURE_FILTER_POINT);
-        }
-    }
-
-    // Animação do Leon parado, sem arma (assets/leon_idle_frames)
-    for (int i = 0; i < IDLE_FRAME_COUNT; i++) {
-        char path[100];
-
-        snprintf(path, sizeof(path), "assets/leon_idle_frames/frame_%02d.png", i + 1);
-        texParado[i] = LoadTexture(path);
-        if (texParado[i].id == 0) {
-            TraceLog(LOG_ERROR, "Frame idle nao encontrado: %s", path);
-        }
-        SetTextureFilter(texParado[i], TEXTURE_FILTER_POINT);
-    }
-
-    Texture2D luzFixa = LoadTexture(LUZ_PATH);
-    if (luzFixa.id == 0) {
-        TraceLog(LOG_ERROR, "Luz nao encontrada: %s", LUZ_PATH);
-        CloseWindow();
-        return 1;
-    }
-
-    Image gradiente = GenImageGradientRadial(640, 640, 0.0f, WHITE, BLACK);
-    Texture2D luzLeon = LoadTextureFromImage(gradiente);
-    UnloadImage(gradiente);
-
-    RenderTexture2D luzTela = LoadRenderTexture(TELA_L, TELA_A);
-
-    Jogador leon = {{INICIO_X, INICIO_Y}, VIDA_MAX, 1, 1, 0.0f, 0.0f, 0.0f};
-    float speed = 200.0f;
-
-    Camera2D camera = {0};
-    camera.offset = (Vector2){TELA_L / 2.0f, TELA_A / 2.0f};
-    camera.zoom = 1.0f;
-
     inimigos_carregar();
 
     while (!jogo.sair && !WindowShouldClose()) {
@@ -578,56 +525,6 @@ int main(void)
             if (jogo.estado == CREDITOS) {
                 creditos_desenhar(&jogo);
             }
-            if (mapa_caixa_bloqueada(leon.pos.x, leon.pos.y + PES, 16, 10, 2)) {
-                leon.pos.y = antes.y;
-            }
-
-            andando = leon.pos.x != antes.x || leon.pos.y != antes.y;
-
-            // Lado para onde o Leon está virado: só muda ao andar na horizontal
-            // (andando só para cima/baixo mantém o último lado)
-            if (leon.pos.x != antes.x) {
-                leon.direita = leon.pos.x > antes.x;
-            }
-
-            camera.target.x = (int)Clamp(leon.pos.x, TELA_L / 2.0f, cenario.width - TELA_L / 2.0f);
-            camera.target.y = (int)Clamp(leon.pos.y, TELA_A / 2.0f, cenario.height - TELA_A / 2.0f);
-
-            atirando = leon.arma > 0 && (IsKeyDown(KEY_SPACE) || IsMouseButtonDown(MOUSE_BUTTON_LEFT));
-            if (atirando) {
-                Vector2 alvo = GetScreenToWorld2D(GetMousePosition(), camera);
-
-                leon.direita = alvo.x >= leon.pos.x;
-                if (leon.tempoTiro <= 0) {
-                    atirar(leon.arma, leon.pos.x, leon.pos.y, alvo.x, alvo.y);
-                    leon.tempoTiro = ARMAS[leon.arma].cadencia;
-                }
-            }
-
-            int dano = inimigos_atualizar(leon.pos.x, leon.pos.y + PES, dt);
-            if (dano > 0 && leon.invencivel <= 0) {
-                leon.vida -= dano;
-                leon.invencivel = 0.6f;
-            }
-        } else if (IsKeyPressed(KEY_ENTER)) {
-            inimigos_liberar();
-            inimigos_criar();
-            leon.pos = (Vector2){INICIO_X, INICIO_Y};
-            leon.vida = VIDA_MAX;
-        }
-
-        // Escolha do frame:
-        //  - atirando: animação de tiro da arma
-        //  - andando: ciclo de corrida da arma
-        //  - parado sem arma: animação idle (8 frames)
-        //  - parado com arma: primeiro frame da corrida da arma
-        Texture2D tex;
-        if (atirando) {
-            tex = texTiro[leon.arma][(int)(leon.tempoAnim * 14) % 6];
-        } else if (andando) {
-            tex = texCorrer[leon.arma][(int)(leon.tempoAnim * 10) % 8];
-        } else if (leon.arma == 0) {
-            tex = texParado[(int)(leon.tempoAnim / IDLE_FRAME_SPEED) % IDLE_FRAME_COUNT];
         } else {
             jogo_atualizar(&jogo, &leon, &cam, &rec, dt);
             jogo_desenhar(&jogo, &leon, &cam, &rec);

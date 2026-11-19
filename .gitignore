@@ -1,0 +1,4 @@
+.DS_Store
+src/jogo
+src/placar.txt
+*.exe
