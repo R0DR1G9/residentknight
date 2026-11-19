@@ -1,6 +1,7 @@
 #include "player.h"
 #include "mapa.h"
 #include "inimigo.h"
+#include "placar.h"
 #include "raylib.h"
 #include "raymath.h"
 #include <math.h>
@@ -27,6 +28,9 @@
 #define AVISO_TEMPO 5.0f
 #define CREDITOS_VEL 70.0f
 #define ESPACO_LINHA 14
+#define CRED_ESPACO 50
+#define CRED_TITULO 28
+#define CRED_TEXTO 24
 
 #define VERSAO_JOGO "BETA 0.1"
 #define MENU_ITENS 3
@@ -43,9 +47,9 @@ typedef struct {
 
 typedef struct {
     Estado estado;
-    int menuSel;
+    int menuSel, posicaoPlacar;
     bool dificil, sair, mostrarTile;
-    float tempoIntro, tempoPortal, creditosY;
+    float tempoIntro, tempoPortal, tempoPartida, creditosY;
 } Jogo;
 
 typedef struct {
@@ -141,6 +145,7 @@ static void reiniciar(Jogo *j, Jogador *leon)
     leon->pos = (Vector2){INICIO_X, INICIO_Y};
     leon->vida = VIDA_MAX;
     j->tempoIntro = 0.0f;
+    j->tempoPartida = 0.0f;
 }
 
 static void novo_jogo(Jogo *j, Jogador *leon)
@@ -246,14 +251,34 @@ static void menu_desenhar(const Jogo *j, const Recursos *r)
     EndDrawing();
 }
 
+static const char *formatar_tempo(float t)
+{
+    return TextFormat("%02d:%05.2f", (int)(t / 60.0f), fmodf(t, 60.0f));
+}
+
+static float linha_credito(const char *txt, float y, int tam, Color cor)
+{
+    if (txt[0] != '\0' && y > -tam && y < TELA_A) {
+        centro(txt, (int)y, tam, cor);
+    }
+    return y + tam + ESPACO_LINHA;
+}
+
+static float creditos_altura(void)
+{
+    float total = 5 * ESPACO_LINHA + 2 * CRED_ESPACO + 2 * CRED_TITULO + CRED_TEXTO;
+
+    for (int k = 0; k < NUM_LINHAS_CREDITOS; k++) {
+        total += LINHAS_CREDITOS[k].tam + ESPACO_LINHA;
+    }
+    return total + placar_quantidade() * (CRED_TEXTO + ESPACO_LINHA);
+}
+
 static void creditos_atualizar(Jogo *j, float dt)
 {
     float vel = IsKeyDown(KEY_SPACE) ? CREDITOS_VEL * 4 : CREDITOS_VEL;
-    float parada = TELA_A / 2.0f + 30;
+    float parada = TELA_A / 2.0f + 30 - creditos_altura();
 
-    for (int k = 0; k < NUM_LINHAS_CREDITOS; k++) {
-        parada -= LINHAS_CREDITOS[k].tam + ESPACO_LINHA;
-    }
     if (IsKeyPressed(KEY_ENTER)) {
         j->estado = MENU;
         j->menuSel = 0;
@@ -271,10 +296,17 @@ static void creditos_desenhar(const Jogo *j)
     for (int k = 0; k < NUM_LINHAS_CREDITOS; k++) {
         const LinhaCredito *l = &LINHAS_CREDITOS[k];
 
-        if (l->texto[0] != '\0' && y > -l->tam && y < TELA_A) {
-            centro(l->texto, (int)y, l->tam, l->destaque ? RED : RAYWHITE);
-        }
-        y += l->tam + ESPACO_LINHA;
+        y = linha_credito(l->texto, y, l->tam, l->destaque ? RED : RAYWHITE);
+    }
+    y = linha_credito("", y, CRED_ESPACO, RAYWHITE);
+    y = linha_credito("SEU TEMPO", y, CRED_TITULO, RED);
+    y = linha_credito(formatar_tempo(j->tempoPartida), y, CRED_TEXTO, RAYWHITE);
+    y = linha_credito("", y, CRED_ESPACO, RAYWHITE);
+    y = linha_credito("MELHORES TEMPOS", y, CRED_TITULO, RED);
+    for (int k = 1; k <= placar_quantidade(); k++) {
+        const char *txt = TextFormat("%d. %s", k, formatar_tempo(placar_tempo(k)));
+
+        y = linha_credito(txt, y, CRED_TEXTO, k == j->posicaoPlacar ? SKYBLUE : RAYWHITE);
     }
     DrawRectangleGradientV(0, 0, TELA_L, 90, BLACK, (Color){0, 0, 0, 0});
     DrawRectangleGradientV(0, TELA_A - 90, TELA_L, 90, (Color){0, 0, 0, 0}, BLACK);
@@ -339,6 +371,7 @@ static void jogo_atualizar(Jogo *j, Jogador *leon, Camera2D *cam, const Recursos
     leon->andando = leon->atirando = 0;
 
     if (leon->vida > 0) {
+        j->tempoPartida += dt;
         leon_atualizar(leon, cam, r, dt);
     } else if (IsKeyPressed(KEY_ENTER)) {
         reiniciar(j, leon);
@@ -350,6 +383,7 @@ static void jogo_atualizar(Jogo *j, Jogador *leon, Camera2D *cam, const Recursos
     if (portal_aberto(leon)) {
         j->tempoPortal += dt;
         if (perto_portal(leon) && IsKeyPressed(KEY_E)) {
+            j->posicaoPlacar = placar_registrar(j->tempoPartida);
             j->estado = CREDITOS;
             j->creditosY = TELA_A;
         }
@@ -511,6 +545,7 @@ int main(void)
         return 1;
     }
     inimigos_carregar();
+    placar_carregar();
 
     while (!jogo.sair && !WindowShouldClose()) {
         float dt = GetFrameTime();
@@ -533,6 +568,7 @@ int main(void)
 
     inimigos_liberar();
     inimigos_descarregar();
+    placar_liberar();
     mapa_liberar();
     recursos_descarregar(&rec);
     CloseWindow();
