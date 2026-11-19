@@ -32,6 +32,7 @@
 #define CRED_TITULO 28
 #define CRED_TEXTO 24
 
+#define ZOOM_CAMERA 1.5f
 #define VERSAO_JOGO "BETA 0.1"
 #define MENU_ITENS 3
 #define DIFICIL_VEL 1.35f
@@ -333,6 +334,8 @@ static void mover_leon(Jogador *leon)
 
 static void leon_atualizar(Jogador *leon, Camera2D *cam, const Recursos *r, float dt)
 {
+    float meiaL = TELA_L / 2.0f / cam->zoom;
+    float meiaA = TELA_A / 2.0f / cam->zoom;
     int dano;
 
     for (int i = 0; i < NUM_ARMAS; i++) {
@@ -341,8 +344,8 @@ static void leon_atualizar(Jogador *leon, Camera2D *cam, const Recursos *r, floa
         }
     }
     mover_leon(leon);
-    cam->target.x = (int)Clamp(leon->pos.x, TELA_L / 2.0f, r->cenario.width - TELA_L / 2.0f);
-    cam->target.y = (int)Clamp(leon->pos.y, TELA_A / 2.0f, r->cenario.height - TELA_A / 2.0f);
+    cam->target.x = (int)Clamp(leon->pos.x, meiaL, r->cenario.width - meiaL);
+    cam->target.y = (int)Clamp(leon->pos.y, meiaA, r->cenario.height - meiaA);
 
     leon->atirando = leon->arma > 0 && (IsKeyDown(KEY_SPACE) || IsMouseButtonDown(MOUSE_BUTTON_LEFT));
     if (leon->atirando) {
@@ -440,17 +443,17 @@ static Texture2D frame_leon(const Jogador *leon, const Recursos *r)
 static void desenhar_luz(const Jogador *leon, const Camera2D *cam, const Recursos *r)
 {
     Vector2 leonTela = GetWorldToScreen2D(leon->pos, *cam);
-    Rectangle visao = {cam->target.x - TELA_L / 2.0f, cam->target.y - TELA_A / 2.0f, TELA_L, TELA_A};
+    Rectangle visao = {cam->target.x - TELA_L / 2.0f / cam->zoom, cam->target.y - TELA_A / 2.0f / cam->zoom, TELA_L / cam->zoom, TELA_A / cam->zoom};
 
     BeginTextureMode(r->luzTela);
     ClearBackground((Color){52, 58, 74, 255});
     BeginBlendMode(BLEND_ADDITIVE);
-    DrawTextureRec(r->luzFixa, visao, (Vector2){0, 0}, WHITE);
+    DrawTexturePro(r->luzFixa, visao, (Rectangle){0, 0, TELA_L, TELA_A}, (Vector2){0, 0}, 0, WHITE);
     DrawTexture(r->luzLeon, (int)leonTela.x - 320, (int)leonTela.y - 320, (Color){235, 225, 190, 255});
     if (portal_aberto(leon)) {
         Vector2 p = GetWorldToScreen2D((Vector2){PORTAL_X, PORTAL_Y - 44}, *cam);
 
-        DrawTexturePro(r->luzLeon, (Rectangle){0, 0, 640, 640}, (Rectangle){p.x - 180, p.y - 180, 360, 360},
+        DrawTexturePro(r->luzLeon, (Rectangle){0, 0, 640, 640}, (Rectangle){p.x - 180 * cam->zoom, p.y - 180 * cam->zoom, 360 * cam->zoom, 360 * cam->zoom},
                        (Vector2){0, 0}, 0, (Color){60, 140, 255, 255});
     }
     EndBlendMode();
@@ -528,7 +531,7 @@ int main(void)
     Recursos rec = {0};
     Jogo jogo = {.estado = MENU, .creditosY = TELA_A};
     Jogador leon = {.pos = {INICIO_X, INICIO_Y}, .vida = VIDA_MAX, .arma = 1, .direita = 1};
-    Camera2D cam = {.offset = {TELA_L / 2.0f, TELA_A / 2.0f}, .zoom = 1.0f};
+    Camera2D cam = {.offset = {TELA_L / 2.0f, TELA_A / 2.0f}, .zoom = ZOOM_CAMERA};
 
     InitWindow(TELA_L, TELA_A, "Resident Night");
     SetTargetFPS(60);
