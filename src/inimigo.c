@@ -42,6 +42,7 @@ const Arma ARMAS[NUM_ARMAS] = {
     {"Shotgun", 14, 6, 0.28f, 0.90f}
 };
 
+<<<<<<< HEAD
 static const int NASCER[][2] = {
     {15, 5}, {16, 11},
     {35, 4}, {28, 5}, {27, 10}, {34, 12},
@@ -50,8 +51,35 @@ static const int NASCER[][2] = {
     {35, 22}, {30, 24}, {25, 26}, {36, 29}, {31, 30},
     {52, 21}, {60, 22}, {45, 26}, {60, 27}, {51, 28},
     {6, 35}, {13, 39}, {6, 40},
+=======
+/* Pontos de nascimento dos zumbis: {coluna, linha} em tiles do mapa (colisao.txt), agrupados por sala.
+   Para ter mais (ou menos) inimigos basta adicionar/remover linhas aqui. Todos estao em chao livre. */
+static const int NASCER[][2] = {
+    /* sala superior esquerda */
+    {15, 5}, {16, 11},
+    /* sala superior central */
+    {35, 4}, {28, 5}, {27, 10}, {34, 12},
+    /* sala superior direita */
+    {59, 5}, {48, 6}, {54, 7}, {43, 9}, {60, 10}, {50, 12},
+    /* sala do meio esquerda */
+    {7, 18}, {13, 22}, {3, 23}, {8, 26},
+    /* sala central (reator) */
+    {35, 22}, {30, 24}, {25, 26}, {36, 29}, {31, 30},
+    /* sala direita (enfermaria) */
+    {52, 21}, {60, 22}, {45, 26}, {60, 27}, {51, 28},
+    /* sala inferior esquerda */
+    {6, 35}, {13, 39}, {6, 40},
+    /* sala inferior central (servidores) */
+>>>>>>> f1c1fc7668397b901117770d75846915401169fa
     {31, 37}, {24, 39}, {38, 39}
 };
+#define NUM_NASCER ((int)(sizeof(NASCER) / sizeof(NASCER[0])))
+#define BOSS_COL 32
+#define BOSS_LIN 38
+
+/* centro do tile em x; y fica perto da base do tile (os pes do inimigo) */
+#define TILE_X(c) ((c) * MAPA_TILE + MAPA_TILE / 2)
+#define TILE_Y(l) ((l) * MAPA_TILE + MAPA_TILE - 8)
 
 static const char *PASTAS[5][2] = {
     {"zumbi_frames", "zumbi_frame"},
@@ -115,10 +143,19 @@ static void novo(int col, int lin, int boss)
 
 void inimigos_criar(void)
 {
+<<<<<<< HEAD
     for (int k = 0; k < NUM_NASCER; k++) {
         novo(NASCER[k][0], NASCER[k][1], 0);
     }
     novo(BOSS_COL, BOSS_LIN, 1);
+=======
+    int k;
+
+    for (k = 0; k < NUM_NASCER; k++) {
+        novo(TILE_X(NASCER[k][0]), TILE_Y(NASCER[k][1]), VIDA_INIMIGO, 0);
+    }
+    novo(TILE_X(BOSS_COL), TILE_Y(BOSS_LIN), BOSS_VIDA, 1);
+>>>>>>> f1c1fc7668397b901117770d75846915401169fa
 }
 
 void inimigos_liberar(void)

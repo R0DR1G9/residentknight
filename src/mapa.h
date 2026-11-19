@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #ifndef MAPA_H
 #define MAPA_H
 
@@ -12,3 +13,19 @@ int mapa_bloqueado(float x, float y);
 int mapa_caixa_bloqueada(float x, float y, float meia, float acima, float abaixo);
 
 #endif
+=======
+#ifndef MAPA_H
+#define MAPA_H
+
+#define MAPA_COLUNAS 64
+#define MAPA_LINHAS  46
+#define MAPA_TILE    48
+#define MAPA_COLISAO_PATH "assets/colisao.txt"
+
+int mapa_carregar(void);
+void mapa_liberar(void);
+int mapa_bloqueado(float x, float y);
+int mapa_caixa_bloqueada(float x, float y, float meia, float acima, float abaixo);
+
+#endif
+>>>>>>> f1c1fc7668397b901117770d75846915401169fa
