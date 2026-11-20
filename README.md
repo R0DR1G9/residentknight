@@ -4,7 +4,7 @@ Jogo de ação em C com a biblioteca [raylib](https://www.raylib.com), visto de 
 
 Você controla o Leon por uma instalação abandonada, cheia de zumbis e com um chefe no fim. Quando todos os inimigos forem derrotados, o portal se abre. Ao entrar nele, o jogo termina com os créditos e o placar de melhores tempos.
 
-Este é o tutorial do jogo que pretendemos desenvolver: um mapa de 8 salas ligadas por corredores.
+Este é o tutorial do jogo que pretendemos desenvolver: Um mapa de 8 salas ligadas por corredores.
 
 Vídeo de demonstração: link a ser adicionado.
 
@@ -33,7 +33,7 @@ O `make` compila todos os `.c` de `src/` e gera o executável `src/jogo`. O jogo
 | W A S D | andar |
 | Mouse (botão esquerdo) ou ESPAÇO | atirar na direção do mouse |
 | 1, 2, 3, 4 | trocar de arma (sem arma, pistola, MP5, shotgun) |
-| E | entrar no portal, quando estiver aberto e por perto |
+| E | entrar no portal, quando estiver aberto e por perto (aparecerá na sala do boss) |
 | ENTER | recomeçar depois de morrer, ou selecionar no menu |
 | M | voltar ao menu depois de morrer |
 | F1 | mostrar a posição do Leon no mapa (tile) |
