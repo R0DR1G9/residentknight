@@ -67,6 +67,10 @@ O tempo da partida conta desde o início até o Leon entrar no portal. Os 5 melh
       placar.c/.h   placar de melhores tempos
       assets/       mapa, sprites, iluminação e áudio
 
+## Link de vídeo de demonstração
+
+ https://youtu.be/UW48pq9sX2E
+
 ## Créditos
 
 Equipe: Arthur Siqueira, Rodrigo Barbosa e João Miguel.
