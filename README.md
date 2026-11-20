@@ -6,7 +6,6 @@ Você controla o Leon por uma instalação abandonada, cheia de zumbis e com um 
 
 Este é o tutorial do jogo que pretendemos desenvolver: Um mapa de 8 salas ligadas por corredores.
 
-Vídeo de demonstração: link a ser adicionado.
 
 ## Como compilar e rodar
 
